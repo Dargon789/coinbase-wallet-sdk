@@ -1,5 +1,6 @@
 import { Preference } from '../core/provider/interface.js';
-import { validatePreferences } from './validatePreferences.js';
+import { validatePreferences, validateSubAccount } from './validatePreferences.js';
+import { ToSubAccountSigner } from ':store/store.js';
 
 describe('validatePreferences', () => {
   it('should not throw an error if preference is undefined', () => {
@@ -66,5 +67,18 @@ describe('validatePreferences', () => {
       },
     };
     expect(() => validatePreferences(validPreference)).not.toThrow();
+  });
+});
+
+describe('validateSubAccount', () => {
+  it('should throw an error if toSubAccountSigner is not a function', () => {
+    expect(() => validateSubAccount(undefined as any)).toThrow(
+      'toSubAccountSigner is not a function'
+    );
+  });
+
+  it('should not throw an error if toSubAccountSigner is a function', () => {
+    const toSubAccountSigner: ToSubAccountSigner = () => Promise.resolve({} as any);
+    expect(() => validateSubAccount(toSubAccountSigner)).not.toThrow();
   });
 });

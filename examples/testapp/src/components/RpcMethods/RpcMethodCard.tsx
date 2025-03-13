@@ -30,6 +30,31 @@ import { multiChainShortcutsMap } from './shortcut/multipleChainShortcuts';
 
 type ResponseType = string;
 
+// Replace address placeholders in string or object values
+const replaceAddressInValue = async (value: any, getCurrentAddress: () => Promise<[string]>) => {
+  if (typeof value === 'string' && (value === ADDR_TO_FILL || value === 'YOUR_ADDRESS_HERE')) {
+    const currentAddress = (await getCurrentAddress())[0];
+    return currentAddress;
+  }
+
+  if (typeof value === 'object') {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      const stringified = JSON.stringify(parsed);
+      if (stringified.includes(ADDR_TO_FILL) || stringified.includes('YOUR_ADDRESS_HERE')) {
+        const currentAddress = (await getCurrentAddress())[0];
+        const replaced = stringified
+          .replace(new RegExp(ADDR_TO_FILL, 'g'), currentAddress)
+          .replace(new RegExp('YOUR_ADDRESS_HERE', 'g'), currentAddress);
+        return typeof value === 'object' ? JSON.parse(replaced) : replaced;
+      }
+    } catch (_) {
+      // If parsing fails, return original value
+    }
+  }
+  return value;
+};
+
 export function RpcMethodCard({ format, method, params, shortcuts }) {
   const [response, setResponse] = React.useState<Response | null>(null);
   const [verifyResult, setVerifyResult] = React.useState<string | null>(null);
@@ -75,12 +100,11 @@ export function RpcMethodCard({ format, method, params, shortcuts }) {
       const dataToSubmit = { ...data };
       let values = dataToSubmit;
       if (format) {
+        const getCurrentAddress = async () => await provider.request({ method: 'eth_accounts' });
+
         for (const key in dataToSubmit) {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
-            if (dataToSubmit[key] === ADDR_TO_FILL) {
-              const addresses = await provider.request({ method: 'eth_accounts' });
-              dataToSubmit[key] = addresses[0];
-            }
+            dataToSubmit[key] = await replaceAddressInValue(dataToSubmit[key], getCurrentAddress);
 
             if (dataToSubmit[key] === CHAIN_ID_TO_FILL) {
               const chainId = await provider.request({ method: 'eth_chainId' });

@@ -1,6 +1,5 @@
 // Copyright (c) 2018-2024 Coinbase, Inc. <https://www.coinbase.com/>
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import eip712 from '../../vendor-js/eth-eip712-util/index.cjs';
 import { Signer } from '../interface.js';
@@ -12,7 +11,7 @@ import { WALLETLINK_URL } from ':core/constants.js';
 import { standardErrors } from ':core/error/errors.js';
 import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/provider/interface.js';
 import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage.js';
-import { AddressString } from ':core/type/index.js';
+import { Address } from ':core/type/index.js';
 import {
   encodeToHexString,
   ensureAddressString,
@@ -34,7 +33,7 @@ export class WalletLinkSigner implements Signer {
   private metadata: AppMetadata;
   private _relay: WalletLinkRelay | null = null;
   private readonly _storage: ScopedLocalStorage;
-  private _addresses: AddressString[] = [];
+  private _addresses: Address[] = [];
   private callback: ProviderEventCallback | null;
 
   constructor(options: { metadata: AppMetadata; callback?: ProviderEventCallback }) {
@@ -44,7 +43,7 @@ export class WalletLinkSigner implements Signer {
 
     const cachedAddresses = this._storage.getItem(LOCAL_STORAGE_ADDRESSES_KEY);
     if (cachedAddresses) {
-      const addresses = cachedAddresses.split(' ') as AddressString[];
+      const addresses = cachedAddresses.split(' ') as Address[];
       if (addresses[0] !== '') {
         this._addresses = addresses.map((address) => ensureAddressString(address));
       }
@@ -63,7 +62,7 @@ export class WalletLinkSigner implements Signer {
     await this._eth_requestAccounts();
   }
 
-  private get selectedAddress(): AddressString | undefined {
+  private get selectedAddress(): Address | undefined {
     return this._addresses[0] || undefined;
   }
 
