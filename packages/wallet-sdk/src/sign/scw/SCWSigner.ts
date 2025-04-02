@@ -1,9 +1,5 @@
 import { Hex, numberToHex } from 'viem';
 
-import { Signer } from '../interface.js';
-import { SCWKeyManager } from './SCWKeyManager.js';
-import { addSenderToRequest, assertParamsChainId, getSenderFromRequest } from './utils.js';
-import { createSubAccountSigner } from './utils/createSubAccountSigner.js';
 import { Communicator } from ':core/communicator/Communicator.js';
 import { standardErrors } from ':core/error/errors.js';
 import { RPCRequestMessage, RPCResponseMessage } from ':core/message/RPCMessage.js';
@@ -12,7 +8,7 @@ import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/prov
 import { WalletConnectResponse } from ':core/rpc/wallet_connect.js';
 import { Address } from ':core/type/index.js';
 import { ensureIntNumber, hexStringFromNumber } from ':core/type/util.js';
-import { createClients, SDKChain } from ':store/chain-clients/utils.js';
+import { SDKChain, createClients } from ':store/chain-clients/utils.js';
 import { config } from ':store/config.js';
 import { store } from ':store/store.js';
 import { assertPresence } from ':util/assertPresence.js';
@@ -23,8 +19,11 @@ import {
   exportKeyToHexString,
   importKeyFromHexString,
 } from ':util/cipher.js';
-import { get } from ':util/get.js';
 import { fetchRPCRequest } from ':util/provider.js';
+import { Signer } from '../interface.js';
+import { SCWKeyManager } from './SCWKeyManager.js';
+import { addSenderToRequest, assertParamsChainId, getSenderFromRequest } from './utils.js';
+import { createSubAccountSigner } from './utils/createSubAccountSigner.js';
 
 type ConstructorOptions = {
   metadata: AppMetadata;
@@ -341,11 +340,8 @@ export class SCWSigner implements Signer {
       return subAccount;
     }
 
+    // Wait for the popup to be loaded before sending the request
     await this.communicator.waitForPopupLoaded?.();
-    const address = get(request, 'params[0].address') as string;
-    if (address) {
-      throw standardErrors.rpc.invalidParams('importing an address is not yet supported');
-    }
 
     const response = await this.sendRequestToPopup(request);
     assertSubAccount(response);
@@ -386,6 +382,7 @@ export class SCWSigner implements Signer {
     const signer = await createSubAccountSigner({
       chainId: this.chain.id,
     });
+
     return signer.request(request);
   }
 }
