@@ -28,6 +28,9 @@ jobs:
       - name: 'Setup'
         uses: ./.github/actions/setup
 
+      - name: Update lockfile
+        run: yarn install --frozen-lockfile
+
       - name: Set version
         run: yarn workspace @coinbase/wallet-sdk version ${{ env.PACKAGE_VERSION }}
 
