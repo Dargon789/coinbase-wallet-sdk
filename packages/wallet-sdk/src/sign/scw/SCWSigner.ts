@@ -1,16 +1,18 @@
-import { Hex, numberToHex } from 'viem';
+import { CB_WALLET_RPC_URL } from ':core/constants.js';
+import { Hex, hexToNumber, numberToHex } from 'viem';
 
 import { Communicator } from ':core/communicator/Communicator.js';
-import { standardErrors } from ':core/error/errors.js';
+import { isActionableHttpRequestError, isViemError, standardErrors } from ':core/error/errors.js';
 import { RPCRequestMessage, RPCResponseMessage } from ':core/message/RPCMessage.js';
 import { RPCResponse } from ':core/message/RPCResponse.js';
 import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/provider/interface.js';
-import { WalletConnectResponse } from ':core/rpc/wallet_connect.js';
+import { FetchPermissionsResponse } from ':core/rpc/coinbase_fetchSpendPermissions.js';
+import { WalletConnectRequest, WalletConnectResponse } from ':core/rpc/wallet_connect.js';
 import { Address } from ':core/type/index.js';
 import { ensureIntNumber, hexStringFromNumber } from ':core/type/util.js';
-import { SDKChain, createClients } from ':store/chain-clients/utils.js';
+import { SDKChain, createClients, getClient } from ':store/chain-clients/utils.js';
 import { store } from ':store/store.js';
-import { assertPresence } from ':util/assertPresence.js';
+import { assertArrayPresence, assertPresence } from ':util/assertPresence.js';
 import { assertSubAccount } from ':util/assertSubAccount.js';
 import {
   decryptContent,
@@ -19,10 +21,25 @@ import {
   importKeyFromHexString,
 } from ':util/cipher.js';
 import { fetchRPCRequest } from ':util/provider.js';
+import { getCryptoKeyAccount } from '../../kms/crypto-key/index.js';
 import { Signer } from '../interface.js';
 import { SCWKeyManager } from './SCWKeyManager.js';
-import { addSenderToRequest, assertParamsChainId, getSenderFromRequest } from './utils.js';
+import {
+  addSenderToRequest,
+  assertFetchPermissionsRequest,
+  assertParamsChainId,
+  fillMissingParamsForFetchPermissions,
+  getSenderFromRequest,
+  initSubAccountConfig,
+  injectRequestCapabilities,
+  makeDataSuffix,
+  prependWithoutDuplicates,
+  requestHasCapability,
+} from './utils.js';
 import { createSubAccountSigner } from './utils/createSubAccountSigner.js';
+import { findOwnerIndex } from './utils/findOwnerIndex.js';
+import { handleAddSubAccountOwner } from './utils/handleAddSubAccountOwner.js';
+import { handleInsufficientBalanceError } from './utils/handleInsufficientBalance.js';
 
 type ConstructorOptions = {
   metadata: AppMetadata;
@@ -81,27 +98,69 @@ export class SCWSigner implements Signer {
   async request(request: RequestArguments) {
     if (this.accounts.length === 0) {
       switch (request.method) {
+        case 'eth_requestAccounts': {
+          const subAccountsConfig = store.subAccountsConfig.get();
+          if (subAccountsConfig?.enableAutoSubAccounts) {
+            // Wait for the popup to be loaded before making async calls
+            await this.communicator.waitForPopupLoaded?.();
+            await initSubAccountConfig();
+            // This will populate the store with the sub account
+            await this.request({
+              method: 'wallet_connect',
+              params: [
+                {
+                  version: 1,
+                  capabilities: {
+                    ...(subAccountsConfig?.capabilities ?? {}),
+                  },
+                },
+              ],
+            });
+          }
+          this.callback?.('connect', { chainId: numberToHex(this.chain.id) });
+          return this.accounts;
+        }
         case 'wallet_switchEthereumChain': {
           assertParamsChainId(request.params);
           this.chain.id = Number(request.params[0].chainId);
           return;
         }
-        case 'wallet_connect':
-        case 'wallet_sendCalls':
+        case 'wallet_connect': {
+          // Wait for the popup to be loaded before making async calls
+          await this.communicator.waitForPopupLoaded?.();
+          await initSubAccountConfig();
+
+          // Check if addSubAccount capability is present and if so, inject the the sub account capabilities
+          let capabilitiesToInject: Record<string, unknown> = {};
+          if (requestHasCapability(request, 'addSubAccount')) {
+            capabilitiesToInject = store.subAccountsConfig.get()?.capabilities ?? {};
+          }
+          const modifiedRequest = injectRequestCapabilities(request, capabilitiesToInject);
+          return this.sendRequestToPopup(modifiedRequest);
+        }
+        case 'wallet_sendCalls': {
           return this.sendRequestToPopup(request);
+        }
         default:
           throw standardErrors.provider.unauthorized();
       }
     }
 
     if (this.shouldRequestUseSubAccountSigner(request)) {
-      return this.sendRequestToSubAccountSignerSigner(request);
+      return this.sendRequestToSubAccountSigner(request);
     }
 
     switch (request.method) {
-      case 'eth_requestAccounts':
+      case 'eth_requestAccounts': {
+        // if auto sub accounts are enabled and we have a sub account, we need to return it as a top level account
+        const subAccount = store.subAccounts.get();
+        if (subAccount?.address) {
+          this.accounts = prependWithoutDuplicates(this.accounts, subAccount.address);
+        }
+
         this.callback?.('connect', { chainId: numberToHex(this.chain.id) });
         return this.accounts;
+      }
       case 'eth_accounts':
         return this.accounts;
       case 'eth_coinbase':
@@ -129,11 +188,32 @@ export class SCWSigner implements Signer {
       case 'wallet_sendCalls':
       case 'wallet_showCallsStatus':
       case 'wallet_grantPermissions':
-      case 'wallet_connect':
         return this.sendRequestToPopup(request);
+      case 'wallet_connect': {
+        // Wait for the popup to be loaded before making async calls
+        await this.communicator.waitForPopupLoaded?.();
+        await initSubAccountConfig();
+        const subAccountsConfig = store.subAccountsConfig.get();
+        const modifiedRequest = injectRequestCapabilities(
+          request,
+          subAccountsConfig?.capabilities ?? {}
+        );
+        return this.sendRequestToPopup(modifiedRequest);
+      }
       // Sub Account Support
       case 'wallet_addSubAccount':
         return this.addSubAccount(request);
+      case 'coinbase_fetchPermissions': {
+        assertFetchPermissionsRequest(request);
+        const completeRequest = fillMissingParamsForFetchPermissions(request);
+        const permissions = (await fetchRPCRequest(
+          completeRequest,
+          CB_WALLET_RPC_URL
+        )) as FetchPermissionsResponse;
+        const requestedChainId = hexToNumber(completeRequest.params?.[0].chainId);
+        store.spendLimits.set({ [requestedChainId]: permissions.permissions });
+        return permissions;
+      }
       default:
         if (!this.chain.rpcUrl) {
           throw standardErrors.rpc.internal('No RPC URL set for chain');
@@ -177,24 +257,40 @@ export class SCWSigner implements Signer {
           accounts,
         });
 
-        // TODO: support multiple accounts?
         const account = response.accounts.at(0);
         const capabilities = account?.capabilities;
-        if (capabilities?.addSubAccount || capabilities?.getSubAccounts) {
-          const capabilityResponse =
-            capabilities?.addSubAccount ?? capabilities?.getSubAccounts?.[0];
-          assertSubAccount(capabilityResponse);
+        const requestCapabilities = (request as WalletConnectRequest).params?.[0]?.capabilities;
+
+        if (capabilities?.subAccounts) {
+          const capabilityResponse = capabilities?.subAccounts;
+          assertArrayPresence(capabilityResponse, 'subAccounts');
+          assertSubAccount(capabilityResponse[0]);
           store.subAccounts.set({
-            address: capabilityResponse?.address,
-            factory: capabilityResponse?.factory,
-            factoryData: capabilityResponse?.factoryData,
+            address: capabilityResponse[0].address,
+            factory: capabilityResponse[0].factory,
+            factoryData: capabilityResponse[0].factoryData,
           });
         }
-        const accounts_ = [this.accounts[0]];
+        let accounts_ = [this.accounts[0]];
+
         const subAccount = store.subAccounts.get();
-        if (subAccount?.address) {
-          accounts_.push(subAccount.address);
+        const subAccountsConfig = store.subAccountsConfig.get();
+
+        // Sub account should be returned as a top level account if auto sub accounts are enabled
+        const shouldUseSubAccount =
+          subAccountsConfig?.enableAutoSubAccounts || !!requestCapabilities?.addSubAccount;
+
+        if (subAccount?.address && shouldUseSubAccount) {
+          this.accounts = prependWithoutDuplicates(this.accounts, subAccount.address);
         }
+
+        const spendLimits = response?.accounts?.[0].capabilities?.spendLimits;
+        if (spendLimits && 'permissions' in spendLimits) {
+          store.spendLimits.set({
+            [this.chain.id]: spendLimits.permissions,
+          });
+        }
+
         this.callback?.('accountsChanged', accounts_);
         break;
       }
@@ -335,12 +431,43 @@ export class SCWSigner implements Signer {
     const state = store.getState();
     const subAccount = state.subAccount;
     if (subAccount?.address) {
-      this.callback?.('accountsChanged', [this.accounts[0], subAccount.address]);
+      // Move the sub account to the top level accounts to make it active
+      this.accounts = prependWithoutDuplicates(this.accounts, subAccount.address);
+      this.callback?.('accountsChanged', this.accounts);
       return subAccount;
     }
 
     // Wait for the popup to be loaded before sending the request
     await this.communicator.waitForPopupLoaded?.();
+
+    if (
+      Array.isArray(request.params) &&
+      request.params.length > 0 &&
+      request.params[0].account &&
+      request.params[0].type === 'create'
+    ) {
+      let keys: { type: string; publicKey: string }[];
+      if (request.params[0].account.keys && request.params[0].account.keys.length > 0) {
+        keys = request.params[0].account.keys;
+      } else {
+        const config = store.subAccountsConfig.get() ?? {};
+        const { account: ownerAccount } = config.toOwnerAccount
+          ? await config.toOwnerAccount()
+          : await getCryptoKeyAccount();
+
+        if (!ownerAccount) {
+          throw standardErrors.provider.unauthorized('could not get subaccount owner account');
+        }
+
+        keys = [
+          {
+            type: ownerAccount.address ? 'address' : 'webauthn-p256',
+            publicKey: ownerAccount.address || ownerAccount.publicKey,
+          },
+        ];
+      }
+      request.params[0].account.keys = keys;
+    }
 
     const response = await this.sendRequestToPopup(request);
     assertSubAccount(response);
@@ -351,7 +478,8 @@ export class SCWSigner implements Signer {
       factory: response.factory,
       factoryData: response.factoryData,
     });
-    this.callback?.('accountsChanged', [this.accounts[0], response.address]);
+    this.accounts = prependWithoutDuplicates(this.accounts, response.address);
+    this.callback?.('accountsChanged', this.accounts);
     return response;
   }
 
@@ -359,16 +487,29 @@ export class SCWSigner implements Signer {
     const sender = getSenderFromRequest(request);
     const subAccount = store.subAccounts.get();
     if (sender) {
-      return sender === subAccount?.address;
+      return sender.toLowerCase() === subAccount?.address.toLowerCase();
     }
     return false;
   }
 
-  private async sendRequestToSubAccountSignerSigner(request: RequestArguments) {
+  private async sendRequestToSubAccountSigner(request: RequestArguments) {
     const subAccount = store.subAccounts.get();
+    const subAccountsConfig = store.subAccountsConfig.get();
+    const config = store.config.get();
+
     assertPresence(
       subAccount?.address,
       standardErrors.provider.unauthorized('no active sub account')
+    );
+
+    // Get the owner account from the config
+    const ownerAccount = subAccountsConfig?.toOwnerAccount
+      ? await subAccountsConfig.toOwnerAccount()
+      : await getCryptoKeyAccount();
+
+    assertPresence(
+      ownerAccount?.account,
+      standardErrors.provider.unauthorized('no active sub account owner')
     );
 
     const sender = getSenderFromRequest(request);
@@ -378,10 +519,99 @@ export class SCWSigner implements Signer {
       request = addSenderToRequest(request, subAccount.address);
     }
 
-    const signer = await createSubAccountSigner({
-      chainId: this.chain.id,
+    const client = getClient(this.chain.id);
+    assertPresence(
+      client,
+      standardErrors.rpc.internal(`client not found for chainId ${this.chain.id}`)
+    );
+
+    const globalAccountAddress = this.accounts.find(
+      (account) => account.toLowerCase() !== subAccount.address.toLowerCase()
+    );
+
+    assertPresence(
+      globalAccountAddress,
+      standardErrors.provider.unauthorized('no global account found')
+    );
+    const dataSuffix = makeDataSuffix({
+      attribution: config.preference?.attribution,
+      dappOrigin: window.location.origin,
     });
 
-    return signer.request(request);
+    const publicKey =
+      ownerAccount.account.type === 'local'
+        ? ownerAccount.account.address
+        : ownerAccount.account.publicKey;
+
+    const ownerIndex = await findOwnerIndex({
+      address: subAccount.address,
+      publicKey,
+      client,
+      factory: subAccount.factory,
+      factoryData: subAccount.factoryData,
+    });
+
+    if (ownerIndex === -1) {
+      try {
+        await handleAddSubAccountOwner({
+          ownerAccount: ownerAccount.account,
+          globalAccountRequest: this.sendRequestToPopup.bind(this),
+        });
+      } catch {
+        return standardErrors.provider.unauthorized('failed to add sub account owner');
+      }
+    }
+
+    const { request: subAccountRequest } = await createSubAccountSigner({
+      address: subAccount.address,
+      owner: ownerAccount.account,
+      client: client,
+      factory: subAccount.factory,
+      factoryData: subAccount.factoryData,
+      parentAddress: globalAccountAddress,
+      attribution: dataSuffix ? { suffix: dataSuffix } : undefined,
+    });
+
+    try {
+      const result = await subAccountRequest(request);
+      return result;
+    } catch (error) {
+      let errorObject: unknown;
+
+      if (isViemError(error)) {
+        errorObject = JSON.parse(error.details);
+      } else if (isActionableHttpRequestError(error)) {
+        errorObject = error;
+      } else {
+        throw error;
+      }
+
+      if (
+        !(
+          isActionableHttpRequestError(errorObject) &&
+          subAccountsConfig?.dynamicSpendLimits &&
+          subAccountsConfig?.enableAutoSubAccounts &&
+          errorObject.data
+        )
+      ) {
+        throw error;
+      }
+
+      try {
+        const result = await handleInsufficientBalanceError({
+          errorData: errorObject.data,
+          globalAccountAddress,
+          subAccountAddress: subAccount.address,
+          client,
+          request,
+          subAccountRequest,
+          globalAccountRequest: this.request.bind(this),
+        });
+        return result;
+      } catch (handlingError) {
+        console.error(handlingError);
+        throw error;
+      }
+    }
   }
 }

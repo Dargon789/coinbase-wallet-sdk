@@ -61,7 +61,8 @@ export const useEventListeners = () => {
   );
 
   const addEventListeners = useCallback(
-    (provider: ProviderInterface) => {
+    (provider?: ProviderInterface) => {
+      if (!provider) return;
       provider.on('connect', handleConnect);
       provider.on('accountsChanged', handleAccountsChanged);
       provider.on('chainChanged', handleChainChanged);
@@ -71,11 +72,12 @@ export const useEventListeners = () => {
   );
 
   const removeEventListeners = useCallback(
-    (provider: ProviderInterface) => {
-      provider.off('connect', handleConnect);
-      provider.off('accountsChanged', handleAccountsChanged);
-      provider.off('chainChanged', handleChainChanged);
-      provider.off('disconnect', handleDisconnect);
+    (provider?: ProviderInterface) => {
+      if (!provider) return;
+      provider.removeListener('connect', handleConnect);
+      provider.removeListener('accountsChanged', handleAccountsChanged);
+      provider.removeListener('chainChanged', handleChainChanged);
+      provider.removeListener('disconnect', handleDisconnect);
     },
     [handleConnect, handleAccountsChanged, handleChainChanged, handleDisconnect]
   );

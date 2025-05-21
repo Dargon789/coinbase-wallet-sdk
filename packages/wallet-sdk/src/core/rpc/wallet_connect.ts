@@ -1,5 +1,7 @@
-import { AddSubAccountAccount } from './wallet_addSubAccount.js';
 import { SerializedEthereumRpcError } from ':core/error/utils.js';
+import { SpendLimitConfig } from ':core/provider/interface.js';
+import { SpendLimit } from './coinbase_fetchSpendPermissions.js';
+import { AddSubAccountAccount } from './wallet_addSubAccount.js';
 
 export type SignInWithEthereumCapabilityRequest = {
   nonce: string;
@@ -21,17 +23,7 @@ export type SignInWithEthereumCapabilityResponse = {
   signature: `0x${string}`;
 };
 
-export type SpendPermissionsCapabilityRequest = {
-  token: `0x${string}`;
-  allowance: string;
-  period: number;
-  salt?: `0x${string}`;
-  extraData?: `0x${string}`;
-};
-
-export type SpendPermissionsCapabilityResponse = {
-  signature: `0x${string}`;
-};
+export type SpendLimitsCapabilityRequest = Record<number, SpendLimitConfig[]>;
 
 export type AddSubAccountCapabilityRequest = {
   account: AddSubAccountAccount;
@@ -43,6 +35,10 @@ export type AddSubAccountCapabilityResponse = {
   factoryData?: `0x${string}`;
 };
 
+export type SpendLimitsCapabilityResponse = {
+  permissions: SpendLimit[];
+};
+
 export type WalletConnectRequest = {
   method: 'wallet_connect';
   params: [
@@ -52,8 +48,7 @@ export type WalletConnectRequest = {
       // Optional capabilities to request (e.g. Sign In With Ethereum).
       capabilities?: {
         addSubAccount?: AddSubAccountCapabilityRequest;
-        getSubAccounts?: boolean;
-        spendPermissions?: SpendPermissionsCapabilityRequest;
+        spendLimits?: SpendLimitsCapabilityRequest;
         signInWithEthereum?: SignInWithEthereumCapabilityRequest;
       };
     },
@@ -66,9 +61,8 @@ export type WalletConnectResponse = {
     address: `0x${string}`;
     // Capabilities granted that is associated with this account.
     capabilities?: {
-      addSubAccount?: AddSubAccountCapabilityResponse | SerializedEthereumRpcError;
-      getSubAccounts?: AddSubAccountCapabilityResponse[];
-      spendPermissions?: SpendPermissionsCapabilityResponse | SerializedEthereumRpcError;
+      subAccounts?: AddSubAccountCapabilityResponse[] | SerializedEthereumRpcError;
+      spendLimits?: SpendLimitsCapabilityResponse | SerializedEthereumRpcError;
       signInWithEthereum?: SignInWithEthereumCapabilityResponse | SerializedEthereumRpcError;
     };
   }[];
