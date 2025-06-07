@@ -1,5 +1,5 @@
 import { CB_WALLET_RPC_URL } from ':core/constants.js';
-import { Hex, hexToNumber, numberToHex } from 'viem';
+import { Hex, hexToNumber, isAddressEqual, numberToHex } from 'viem';
 
 import { Communicator } from ':core/communicator/Communicator.js';
 import { isActionableHttpRequestError, isViemError, standardErrors } from ':core/error/errors.js';
@@ -27,8 +27,10 @@ import { SCWKeyManager } from './SCWKeyManager.js';
 import {
   addSenderToRequest,
   assertFetchPermissionsRequest,
+  assertGetCapabilitiesParams,
   assertParamsChainId,
   fillMissingParamsForFetchPermissions,
+  getCachedWalletConnectResponse,
   getSenderFromRequest,
   initSubAccountConfig,
   injectRequestCapabilities,
@@ -99,8 +101,7 @@ export class SCWSigner implements Signer {
     if (this.accounts.length === 0) {
       switch (request.method) {
         case 'eth_requestAccounts': {
-          const subAccountsConfig = store.subAccountsConfig.get();
-          if (subAccountsConfig?.enableAutoSubAccounts) {
+          if (store.subAccountsConfig.get()?.enableAutoSubAccounts) {
             // Wait for the popup to be loaded before making async calls
             await this.communicator.waitForPopupLoaded?.();
             await initSubAccountConfig();
@@ -109,9 +110,9 @@ export class SCWSigner implements Signer {
               method: 'wallet_connect',
               params: [
                 {
-                  version: 1,
+                  version: "1",
                   capabilities: {
-                    ...(subAccountsConfig?.capabilities ?? {}),
+                    ...(store.subAccountsConfig.get()?.capabilities ?? {}),
                   },
                 },
               ],
@@ -170,7 +171,7 @@ export class SCWSigner implements Signer {
       case 'eth_chainId':
         return numberToHex(this.chain.id);
       case 'wallet_getCapabilities':
-        return store.getState().account.capabilities;
+        return this.handleGetCapabilitiesRequest(request);
       case 'wallet_switchEthereumChain':
         return this.handleSwitchChainRequest(request);
       case 'eth_ecRecover':
@@ -190,6 +191,12 @@ export class SCWSigner implements Signer {
       case 'wallet_grantPermissions':
         return this.sendRequestToPopup(request);
       case 'wallet_connect': {
+        // Return cached wallet connect response if available
+        const cachedResponse = await getCachedWalletConnectResponse();
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
         // Wait for the popup to be loaded before making async calls
         await this.communicator.waitForPopupLoaded?.();
         await initSubAccountConfig();
@@ -211,7 +218,12 @@ export class SCWSigner implements Signer {
           CB_WALLET_RPC_URL
         )) as FetchPermissionsResponse;
         const requestedChainId = hexToNumber(completeRequest.params?.[0].chainId);
-        store.spendLimits.set({ [requestedChainId]: permissions.permissions });
+        store.spendLimits.set(
+          permissions.permissions.map((permission) => ({
+            ...permission,
+            chainId: requestedChainId,
+          }))
+        );
         return permissions;
       }
       default:
@@ -285,10 +297,9 @@ export class SCWSigner implements Signer {
         }
 
         const spendLimits = response?.accounts?.[0].capabilities?.spendLimits;
+
         if (spendLimits && 'permissions' in spendLimits) {
-          store.spendLimits.set({
-            [this.chain.id]: spendLimits.permissions,
-          });
+          store.spendLimits.set(spendLimits?.permissions);
         }
 
         this.callback?.('accountsChanged', accounts_);
@@ -331,6 +342,47 @@ export class SCWSigner implements Signer {
       this.updateChain(chainId);
     }
     return popupResult;
+  }
+
+  private async handleGetCapabilitiesRequest(request: RequestArguments) {
+    assertGetCapabilitiesParams(request.params);
+    
+    const requestedAccount = request.params[0];
+    const filterChainIds = request.params[1]; // Optional second parameter
+
+    if (!this.accounts.some((account) => isAddressEqual(account, requestedAccount))) {
+      throw standardErrors.provider.unauthorized('no active account found');
+    }
+
+    const capabilities = store.getState().account.capabilities;
+    
+    // Return empty object if capabilities is undefined
+    if (!capabilities) {
+      return {};
+    }
+    
+    // If no filter is provided, return all capabilities
+    if (!filterChainIds || filterChainIds.length === 0) {
+      return capabilities;
+    }
+
+    // Convert filter chain IDs to numbers once for efficient lookup
+    const filterChainNumbers = new Set(filterChainIds.map(chainId => hexToNumber(chainId)));
+
+    // Filter capabilities
+    const filteredCapabilities = Object.fromEntries(
+      Object.entries(capabilities).filter(([capabilityKey]) => {
+        try {
+          const capabilityChainNumber = hexToNumber(capabilityKey as `0x${string}`);
+          return filterChainNumbers.has(capabilityChainNumber);
+        } catch {
+          // If capabilityKey is not a valid hex string, exclude it
+          return false;
+        }
+      })
+    );
+    
+    return filteredCapabilities;
   }
 
   private async sendEncryptedRequest(request: RequestArguments): Promise<RPCResponseMessage> {
@@ -586,14 +638,7 @@ export class SCWSigner implements Signer {
         throw error;
       }
 
-      if (
-        !(
-          isActionableHttpRequestError(errorObject) &&
-          subAccountsConfig?.dynamicSpendLimits &&
-          subAccountsConfig?.enableAutoSubAccounts &&
-          errorObject.data
-        )
-      ) {
+      if (!(isActionableHttpRequestError(errorObject) && errorObject.data)) {
         throw error;
       }
 

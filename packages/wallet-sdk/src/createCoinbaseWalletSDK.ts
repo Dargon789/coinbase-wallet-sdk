@@ -58,7 +58,6 @@ export function createCoinbaseWalletSDK(params: CreateCoinbaseWalletSDKOptions) 
     toOwnerAccount: params.subAccounts?.toOwnerAccount,
     enableAutoSubAccounts: params.subAccounts?.enableAutoSubAccounts,
     defaultSpendLimits: params.subAccounts?.defaultSpendLimits,
-    dynamicSpendLimits: params.subAccounts?.dynamicSpendLimits,
   });
 
   // set the options in the store
@@ -110,7 +109,7 @@ export function createCoinbaseWalletSDK(params: CreateCoinbaseWalletSDKOptions) 
           method: 'wallet_connect',
           params: [
             {
-              version: 1,
+              version: "1",
               capabilities: {},
             },
           ],
@@ -162,7 +161,7 @@ export function createCoinbaseWalletSDK(params: CreateCoinbaseWalletSDKOptions) 
               calls,
               chainId: toHex(chainId),
               from: account.accounts?.[0],
-              version: 1,
+              version: "1",
             },
           ],
         })) as string;
