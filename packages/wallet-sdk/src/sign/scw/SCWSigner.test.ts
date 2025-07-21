@@ -5,8 +5,9 @@ import { CB_KEYS_URL } from ':core/constants.js';
 import { standardErrors } from ':core/error/errors.js';
 import { EncryptedData, RPCResponseMessage } from ':core/message/RPCMessage.js';
 import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/provider/interface.js';
-import { SpendLimit } from ':core/rpc/coinbase_fetchSpendPermissions.js';
+import { SpendPermission } from ':core/rpc/coinbase_fetchSpendPermissions.js';
 import { getClient } from ':store/chain-clients/utils.js';
+import { correlationIds } from ':store/correlation-ids/store.js';
 import { store } from ':store/store.js';
 import {
   decryptContent,
@@ -78,8 +79,10 @@ const mockChains = {
 const mockCapabilities = {};
 
 const mockError = standardErrors.provider.unauthorized();
+const mockCorrelationId = '2-2-3-4-5';
 const mockSuccessResponse: RPCResponseMessage = {
   id: '1-2-3-4-5',
+  correlationId: mockCorrelationId,
   requestId: '1-2-3-4-5',
   sender: '0xPublicKey',
   content: { encrypted: encryptedData },
@@ -119,6 +122,7 @@ describe('SCWSigner', () => {
     (exportKeyToHexString as Mock).mockResolvedValueOnce('0xPublicKey');
     mockKeyManager.getSharedSecret.mockResolvedValue(mockCryptoKey);
     (encryptContent as Mock).mockResolvedValueOnce(encryptedData);
+    vi.spyOn(correlationIds, 'get').mockReturnValue(mockCorrelationId);
 
     signer = new SCWSigner({
       metadata: mockMetadata,
@@ -132,6 +136,10 @@ describe('SCWSigner', () => {
 
     store.account.clear();
     store.chains.clear();
+    store.keys.clear();
+    store.spendPermissions.clear();
+    store.subAccounts.clear();
+    store.subAccountsConfig.clear();
     store.setState({});
   });
 
@@ -170,11 +178,25 @@ describe('SCWSigner', () => {
         capabilities: mockCapabilities,
       });
 
+      // Mock the wallet_connect response that eth_requestAccounts now calls internally
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: {
+            accounts: [
+              {
+                address: '0xAddress',
+                capabilities: {},
+              },
+            ],
+          },
+        },
+      });
+
       await expect(signer.request({ method: 'eth_requestAccounts' })).resolves.toEqual([
         '0xAddress',
       ]);
+      expect(mockCallback).toHaveBeenCalledWith('chainChanged', '0x1');
       expect(mockCallback).toHaveBeenCalledWith('accountsChanged', ['0xAddress']);
-      expect(mockCallback).toHaveBeenCalledWith('connect', { chainId: '0x1' });
     });
 
     it('should perform a successful handshake for handshake', async () => {
@@ -208,6 +230,7 @@ describe('SCWSigner', () => {
     it('should throw an error if failure in response.content', async () => {
       const mockResponse: RPCResponseMessage = {
         id: '1-2-3-4-5',
+        correlationId: mockCorrelationId,
         requestId: '1-2-3-4-5',
         sender: '0xPublicKey',
         content: { failure: mockError },
@@ -222,10 +245,13 @@ describe('SCWSigner', () => {
   });
 
   describe('request - ephemeral signer', () => {
-    it.each(['wallet_sendCalls'])(
+    it.each(['wallet_sendCalls', 'wallet_sign'])(
       'should perform a successful request after handshake',
       async (method) => {
         const mockRequest: RequestArguments = { method };
+
+        // Reset and setup mocks for handshake
+        (decryptContent as Mock).mockReset();
         (decryptContent as Mock).mockResolvedValueOnce({
           result: {
             value: null,
@@ -261,6 +287,9 @@ describe('SCWSigner', () => {
     let stateSpy: MockInstance;
 
     beforeAll(() => {
+      signer['accounts'] = ['0xAddress'];
+      signer['chain'] = { id: 1, rpcUrl: 'https://eth-rpc.example.com/1' };
+
       stateSpy = vi.spyOn(store, 'getState').mockImplementation(() => ({
         account: {
           accounts: ['0xAddress'],
@@ -268,7 +297,7 @@ describe('SCWSigner', () => {
         },
         chains: [],
         keys: {},
-        spendLimits: [],
+        spendPermissions: [],
         config: {
           metadata: mockMetadata,
           preference: { keysUrl: CB_KEYS_URL, options: 'all' },
@@ -424,6 +453,64 @@ describe('SCWSigner', () => {
     });
   });
 
+  describe('eth_accounts', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return accounts in correct order based on enableAutoSubAccounts', async () => {
+      // Set up the signer with a global account
+      signer['accounts'] = [globalAccountAddress];
+      signer['chain'] = { id: 1, rpcUrl: 'https://eth-rpc.example.com/1' };
+
+      // Set a sub account in the store
+      const subAccountsSpy = vi.spyOn(store.subAccounts, 'get').mockReturnValue({
+        address: subAccountAddress,
+        factory: globalAccountAddress,
+        factoryData: '0x',
+      });
+
+      // Test with enableAutoSubAccounts = false
+      const configSpy = vi.spyOn(store.subAccountsConfig, 'get').mockReturnValue({
+        enableAutoSubAccounts: false,
+      });
+
+      let accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
+
+      // Test with enableAutoSubAccounts = true
+      configSpy.mockReturnValue({
+        enableAutoSubAccounts: true,
+      });
+
+      accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+
+      // Test when enableAutoSubAccounts is undefined (should default to false behavior)
+      configSpy.mockReturnValue(undefined);
+
+      accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
+
+      subAccountsSpy.mockRestore();
+      configSpy.mockRestore();
+    });
+
+    it('should return only global account when no sub account exists', async () => {
+      // Set up the signer with only a global account
+      signer['accounts'] = [globalAccountAddress];
+      signer['chain'] = { id: 1, rpcUrl: 'https://eth-rpc.example.com/1' };
+
+      // No sub account in the store
+      const subAccountsSpy = vi.spyOn(store.subAccounts, 'get').mockReturnValue(undefined);
+
+      const accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([globalAccountAddress]);
+
+      subAccountsSpy.mockRestore();
+    });
+  });
+
   describe('wallet_connect', () => {
     beforeEach(async () => {
       await signer.cleanup();
@@ -433,6 +520,10 @@ describe('SCWSigner', () => {
         },
       });
       await signer.handshake({ method: 'handshake' });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
 
     it('should handle wallet_connect with no capabilities', async () => {
@@ -480,9 +571,9 @@ describe('SCWSigner', () => {
         factoryData: '0x',
       });
 
-      // eth_accounts should return only global account
+      // eth_accounts should return both accounts with global account first
       const accounts = await signer.request({ method: 'eth_accounts' });
-      expect(accounts).toEqual([globalAccountAddress]);
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
     });
 
     it('should handle wallet_connect with addSubAccount capability', async () => {
@@ -541,10 +632,10 @@ describe('SCWSigner', () => {
         factoryData: '0x',
       });
 
-      // eth_accounts should return [subAccount, globalAccount]
+      // eth_accounts should return [globalAccount, subAccount] when enableAutoSubAccounts is not true
       const accounts = await signer.request({ method: 'eth_accounts' });
 
-      expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
     });
 
     it('should handle wallet_addSubAccount creating new sub account', async () => {
@@ -607,12 +698,52 @@ describe('SCWSigner', () => {
         factoryData: '0x',
       });
 
-      // eth_accounts should return [subAccount, globalAccount]
+      // eth_accounts should return [globalAccount, subAccount] when enableAutoSubAccounts is not true
       const accounts = await signer.request({ method: 'eth_accounts' });
-      expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
     });
 
-    it('should handle eth_requestAccounts with auto sub accounts enabled', async () => {
+    it('should route eth_requestAccounts through wallet_connect', async () => {
+      expect(signer['accounts']).toEqual([]);
+
+      const mockSetAccount = vi.spyOn(store.account, 'set');
+      const mockSetSubAccounts = vi.spyOn(store.subAccounts, 'set');
+
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: {
+            accounts: [
+              {
+                address: globalAccountAddress,
+                capabilities: {},
+              },
+            ],
+          },
+        },
+      });
+
+      const accounts = await signer.request({
+        method: 'eth_requestAccounts',
+        params: [],
+      });
+
+      // Should persist global account to accounts store
+      expect(mockSetAccount).toHaveBeenCalledWith({
+        accounts: [globalAccountAddress],
+      });
+
+      // No sub account to be persisted
+      expect(mockSetSubAccounts).not.toHaveBeenCalled();
+
+      // Should return [globalAccount]
+      expect(accounts).toEqual([globalAccountAddress]);
+
+      // eth_accounts should also return [globalAccount]
+      const ethAccounts = await signer.request({ method: 'eth_accounts' });
+      expect(ethAccounts).toEqual([globalAccountAddress]);
+    });
+
+    it('should route eth_requestAccounts through wallet_connect and handle sub account', async () => {
       expect(signer['accounts']).toEqual([]);
       vi.spyOn(store.subAccountsConfig, 'get').mockReturnValue({
         enableAutoSubAccounts: true,
@@ -682,7 +813,7 @@ describe('SCWSigner', () => {
         params: [],
       };
 
-      const mockSpendLimits = [
+      const mockSpendPermissions = [
         {
           permissionHash: '0xPermissionHash',
           signature: '0xSignature',
@@ -708,8 +839,8 @@ describe('SCWSigner', () => {
                       factoryData: '0x',
                     },
                   ],
-                  spendLimits: {
-                    permissions: mockSpendLimits,
+                  spendPermissions: {
+                    permissions: mockSpendPermissions,
                   },
                 },
               },
@@ -743,17 +874,79 @@ describe('SCWSigner', () => {
                   factoryData: '0x',
                 },
               ],
-              spendLimits: {
-                permissions: mockSpendLimits,
+              spendPermissions: {
+                permissions: mockSpendPermissions,
               },
             },
           },
         ],
       });
     });
+
+    it('should always return sub account first when enableAutoSubAccounts is true', async () => {
+      expect(signer['accounts']).toEqual([]);
+
+      // Enable auto sub accounts
+      vi.spyOn(store.subAccountsConfig, 'get').mockReturnValue({
+        enableAutoSubAccounts: true,
+      });
+
+      const mockRequest: RequestArguments = {
+        method: 'wallet_connect',
+        params: [],
+      };
+
+      const mockSetAccount = vi.spyOn(store.account, 'set');
+      const mockSetSubAccounts = vi.spyOn(store.subAccounts, 'set');
+
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: {
+            accounts: [
+              {
+                address: globalAccountAddress,
+                capabilities: {
+                  subAccounts: [
+                    {
+                      address: subAccountAddress,
+                      factory: globalAccountAddress,
+                      factoryData: '0x',
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      await signer.request(mockRequest);
+
+      // Should persist accounts correctly
+      expect(mockSetAccount).toHaveBeenCalledWith({
+        accounts: [globalAccountAddress],
+      });
+      expect(mockSetSubAccounts).toHaveBeenCalledWith({
+        address: subAccountAddress,
+        factory: globalAccountAddress,
+        factoryData: '0x',
+      });
+
+      // When enableAutoSubAccounts is true, sub account should be first
+      const accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+
+      // Test with eth_requestAccounts as well
+      const requestedAccounts = await signer.request({ method: 'eth_requestAccounts' });
+      expect(requestedAccounts).toEqual([subAccountAddress, globalAccountAddress]);
+    });
   });
 
   describe('wallet_addSubAccount', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it('should update internal state for successful wallet_addSubAccount', async () => {
       await signer.cleanup();
 
@@ -816,7 +1009,7 @@ describe('SCWSigner', () => {
       });
 
       const accounts = await signer.request({ method: 'eth_accounts' });
-      expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
 
       expect(mockSetAccount).toHaveBeenCalledWith({
         accounts: [globalAccountAddress],
@@ -907,7 +1100,81 @@ describe('SCWSigner', () => {
       );
 
       const accounts = await signer.request({ method: 'eth_accounts' });
+      expect(accounts).toEqual([globalAccountAddress, subAccountAddress]);
+    });
+
+    it('should always return sub account first when enableAutoSubAccounts is true', async () => {
+      await signer.cleanup();
+
+      // Enable auto sub accounts
+      vi.spyOn(store.subAccountsConfig, 'get').mockReturnValue({
+        enableAutoSubAccounts: true,
+      });
+
+      const mockRequest: RequestArguments = {
+        method: 'wallet_connect',
+        params: [],
+      };
+
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: null,
+        },
+      });
+
+      await signer.handshake({ method: 'handshake' });
+      expect(signer['accounts']).toEqual([]);
+
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: {
+            accounts: [
+              {
+                address: globalAccountAddress,
+                capabilities: {},
+              },
+            ],
+          },
+        },
+      });
+
+      await signer.request(mockRequest);
+
+      (decryptContent as Mock).mockResolvedValueOnce({
+        result: {
+          value: {
+            address: subAccountAddress,
+            factory: '0xe6c7D51b0d5ECC217BE74019447aeac4580Afb54',
+            factoryData: '0xe6c7D51b0d5ECC217BE74019447aeac4580Afb54',
+          },
+        },
+      });
+
+      await signer.request({
+        method: 'wallet_addSubAccount',
+        params: [
+          {
+            version: '1',
+            account: {
+              type: 'create',
+              keys: [
+                {
+                  publicKey: '0x123',
+                  type: 'p256',
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      // wallet_addSubAccount now respects enableAutoSubAccounts, so sub account should be first
+      const accounts = await signer.request({ method: 'eth_accounts' });
       expect(accounts).toEqual([subAccountAddress, globalAccountAddress]);
+
+      // However, eth_requestAccounts will reorder based on enableAutoSubAccounts
+      const requestedAccounts = await signer.request({ method: 'eth_requestAccounts' });
+      expect(requestedAccounts).toEqual([subAccountAddress, globalAccountAddress]);
     });
   });
 
@@ -956,6 +1223,10 @@ describe('SCWSigner', () => {
       });
     });
 
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it('should create a sub account when eth_requestAccounts is called', async () => {
       const mockRequest: RequestArguments = {
         method: 'eth_requestAccounts',
@@ -974,6 +1245,13 @@ describe('SCWSigner', () => {
       });
 
       (findOwnerIndex as Mock).mockResolvedValueOnce(-1);
+      (handleAddSubAccountOwner as Mock).mockResolvedValueOnce(0);
+
+      // Ensure createSubAccountSigner returns the expected shape
+      (createSubAccountSigner as Mock).mockResolvedValueOnce({
+        request: vi.fn().mockResolvedValue('0xResult'),
+      });
+
       (decryptContent as Mock).mockResolvedValueOnce({
         result: {
           value: null,
@@ -1024,6 +1302,61 @@ describe('SCWSigner', () => {
       await signer.request(mockRequest);
 
       expect(handleAddSubAccountOwner).toHaveBeenCalled();
+    });
+
+    it('should not handle insufficient balance error if external funding source data is not provided', async () => {
+      (createSubAccountSigner as Mock).mockImplementation(async () => {
+        const request = vi.fn((args) => {
+          throw new HttpRequestError({
+            body: args,
+            url: 'https://eth-rpc.example.com/1',
+            details: JSON.stringify({
+              code: -32090,
+              message: 'transfer amount exceeds balance',
+              data: undefined,
+            }),
+          });
+        });
+
+        return {
+          request,
+        };
+      });
+
+      await signer.request({
+        method: 'eth_requestAccounts',
+        params: [],
+      });
+
+      const mockRequest: RequestArguments = {
+        method: 'wallet_sendCalls',
+        params: [
+          {
+            calls: [
+              {
+                to: '0x',
+                value: '0x0',
+                data: '0x',
+              },
+            ],
+            chainId: numberToHex(84532),
+            from: subAccountAddress,
+            version: '1.0',
+          },
+        ],
+      };
+
+      signer = new SCWSigner({
+        metadata: mockMetadata,
+        communicator: mockCommunicator,
+        callback: mockCallback,
+      });
+
+      await expect(signer.request(mockRequest)).rejects.toThrow();
+
+      expect(handleInsufficientBalanceError).not.toHaveBeenCalled();
+
+      (createSubAccountSigner as Mock).mockRestore();
     });
 
     it('should handle insufficient balance error if external funding source is present', async () => {
@@ -1107,21 +1440,21 @@ describe('SCWSigner', () => {
         account: {
           accounts: [globalAccountAddress],
           capabilities: {
-            '0x1': { 
+            '0x1': {
               atomicBatch: { supported: true },
-              paymasterService: { supported: true }
+              paymasterService: { supported: true },
             },
             '0x5': {
-              atomicBatch: { supported: false }
+              atomicBatch: { supported: false },
             },
             '0xa': {
-              paymasterService: { supported: true }
-            }
+              paymasterService: { supported: true },
+            },
           },
         },
         chains: [],
         keys: {},
-        spendLimits: [],
+        spendPermissions: [],
         config: {
           metadata: mockMetadata,
           preference: { keysUrl: CB_KEYS_URL, options: 'all' },
@@ -1145,16 +1478,16 @@ describe('SCWSigner', () => {
       const result = await signer.request(request);
 
       expect(result).toEqual({
-        '0x1': { 
+        '0x1': {
           atomicBatch: { supported: true },
-          paymasterService: { supported: true }
+          paymasterService: { supported: true },
         },
         '0x5': {
-          atomicBatch: { supported: false }
+          atomicBatch: { supported: false },
         },
         '0xa': {
-          paymasterService: { supported: true }
-        }
+          paymasterService: { supported: true },
+        },
       });
     });
 
@@ -1167,13 +1500,13 @@ describe('SCWSigner', () => {
       const result = await signer.request(request);
 
       expect(result).toEqual({
-        '0x1': { 
+        '0x1': {
           atomicBatch: { supported: true },
-          paymasterService: { supported: true }
+          paymasterService: { supported: true },
         },
         '0xa': {
-          paymasterService: { supported: true }
-        }
+          paymasterService: { supported: true },
+        },
       });
     });
 
@@ -1187,13 +1520,13 @@ describe('SCWSigner', () => {
       const result = await signer.request(request);
 
       expect(result).toEqual({
-        '0x1': { 
+        '0x1': {
           atomicBatch: { supported: true },
-          paymasterService: { supported: true }
+          paymasterService: { supported: true },
         },
         '0x5': {
-          atomicBatch: { supported: false }
-        }
+          atomicBatch: { supported: false },
+        },
       });
     });
 
@@ -1216,7 +1549,7 @@ describe('SCWSigner', () => {
         },
         chains: [],
         keys: {},
-        spendLimits: [],
+        spendPermissions: [],
         config: {
           metadata: mockMetadata,
           preference: { keysUrl: CB_KEYS_URL, options: 'all' },
@@ -1243,16 +1576,16 @@ describe('SCWSigner', () => {
       const result = await signer.request(request);
 
       expect(result).toEqual({
-        '0x1': { 
+        '0x1': {
           atomicBatch: { supported: true },
-          paymasterService: { supported: true }
+          paymasterService: { supported: true },
         },
         '0x5': {
-          atomicBatch: { supported: false }
+          atomicBatch: { supported: false },
         },
         '0xa': {
-          paymasterService: { supported: true }
-        }
+          paymasterService: { supported: true },
+        },
       });
     });
 
@@ -1263,12 +1596,12 @@ describe('SCWSigner', () => {
           capabilities: {
             '0x1': { atomicBatch: { supported: true } },
             'invalid-key': { someFeature: true },
-            '0x5': { paymasterService: { supported: true } }
+            '0x5': { paymasterService: { supported: true } },
           },
         },
         chains: [],
         keys: {},
-        spendLimits: [],
+        spendPermissions: [],
         config: {
           metadata: mockMetadata,
           preference: { keysUrl: CB_KEYS_URL, options: 'all' },
@@ -1284,7 +1617,7 @@ describe('SCWSigner', () => {
       const result = await signer.request(request);
 
       expect(result).toEqual({
-        '0x1': { atomicBatch: { supported: true } }
+        '0x1': { atomicBatch: { supported: true } },
       });
     });
 
@@ -1317,7 +1650,7 @@ describe('SCWSigner', () => {
   });
 
   describe('coinbase_fetchPermissions', () => {
-    const mockSpendLimits = [
+    const mockSpendPermissions = [
       {
         permissionHash: '0xPermissionHash',
         signature: '0xSignature',
@@ -1327,7 +1660,7 @@ describe('SCWSigner', () => {
         },
         chainId: 10,
       },
-    ] as [SpendLimit];
+    ] as [SpendPermission];
 
     beforeEach(() => {
       vi.spyOn(store, 'getState').mockImplementation(() => ({
@@ -1340,7 +1673,7 @@ describe('SCWSigner', () => {
         },
         chains: [],
         keys: {},
-        spendLimits: [],
+        spendPermissions: [],
         config: {
           metadata: mockMetadata,
           preference: { keysUrl: CB_KEYS_URL, options: 'all' },
@@ -1349,7 +1682,7 @@ describe('SCWSigner', () => {
       }));
 
       (fetchRPCRequest as Mock).mockResolvedValue({
-        permissions: mockSpendLimits,
+        permissions: mockSpendPermissions,
       });
     });
 
@@ -1362,11 +1695,11 @@ describe('SCWSigner', () => {
 
       signer['accounts'] = ['0xAddress']; // mock the logged in state
 
-      const mockSetSpendLimits = vi.spyOn(store.spendLimits, 'set');
+      const mockSetSpendPermissions = vi.spyOn(store.spendPermissions, 'set');
 
       await signer.request(mockRequest);
 
-      expect(mockSetSpendLimits).toHaveBeenCalledWith(mockSpendLimits);
+      expect(mockSetSpendPermissions).toHaveBeenCalledWith(mockSpendPermissions);
     });
   });
 });

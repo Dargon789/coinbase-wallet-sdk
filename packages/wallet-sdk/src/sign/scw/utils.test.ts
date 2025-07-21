@@ -3,6 +3,7 @@ import { hashTypedData, hexToBigInt, numberToHex } from 'viem';
 import {
   SpendPermissionBatch,
   addSenderToRequest,
+  appendWithoutDuplicates,
   assertFetchPermissionsRequest,
   assertGetCapabilitiesParams,
   assertParamsChainId,
@@ -120,9 +121,15 @@ describe('assertGetCapabilitiesParams', () => {
     expect(() => assertGetCapabilitiesParams(['0x123'])).toThrow(); // Too short
     expect(() => assertGetCapabilitiesParams(['0x123abc'])).toThrow(); // Too short
     expect(() => assertGetCapabilitiesParams(['xyz123'])).toThrow(); // No 0x prefix
-    expect(() => assertGetCapabilitiesParams(['0x12345678901234567890123456789012345678gg'])).toThrow(); // Invalid hex characters
-    expect(() => assertGetCapabilitiesParams(['0x123456789012345678901234567890123456789'])).toThrow(); // Too short (39 chars)
-    expect(() => assertGetCapabilitiesParams(['0x12345678901234567890123456789012345678901'])).toThrow(); // Too long (41 chars)
+    expect(() =>
+      assertGetCapabilitiesParams(['0x12345678901234567890123456789012345678gg'])
+    ).toThrow(); // Invalid hex characters
+    expect(() =>
+      assertGetCapabilitiesParams(['0x123456789012345678901234567890123456789'])
+    ).toThrow(); // Too short (39 chars)
+    expect(() =>
+      assertGetCapabilitiesParams(['0x12345678901234567890123456789012345678901'])
+    ).toThrow(); // Too long (41 chars)
   });
 
   it('should not throw for valid single parameter (valid Ethereum address)', () => {
@@ -148,7 +155,9 @@ describe('assertGetCapabilitiesParams', () => {
   it('should not throw for valid parameters with filter array', () => {
     expect(() => assertGetCapabilitiesParams([VALID_ADDRESS_1, []])).not.toThrow();
     expect(() => assertGetCapabilitiesParams([VALID_ADDRESS_1, ['0x1']])).not.toThrow();
-    expect(() => assertGetCapabilitiesParams([VALID_ADDRESS_1, ['0x1', '0x2', '0x3']])).not.toThrow();
+    expect(() =>
+      assertGetCapabilitiesParams([VALID_ADDRESS_1, ['0x1', '0x2', '0x3']])
+    ).not.toThrow();
     expect(() => assertGetCapabilitiesParams([VALID_ADDRESS_1, ['0xabcdef', '0x0']])).not.toThrow();
     expect(() => assertGetCapabilitiesParams([VALID_ADDRESS_2, ['0x1', '0xa']])).not.toThrow();
   });
@@ -326,7 +335,7 @@ describe('fillMissingParamsForFetchPermissions', () => {
       subAccount: { address: '0x456' },
       chains: [],
       keys: {},
-      spendLimits: [],
+      spendPermissions: [],
       config: {
         version: '1.0.0',
       },
@@ -476,9 +485,19 @@ describe('prependWithoutDuplicates', () => {
   });
 });
 
+describe('appendWithoutDuplicates', () => {
+  it('should append an item to an array without duplicates', () => {
+    expect(appendWithoutDuplicates(['1', '2', '3'], '4')).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('should move an existing item to the end of the array', () => {
+    expect(appendWithoutDuplicates(['1', '2', '3'], '2')).toEqual(['1', '3', '2']);
+  });
+});
+
 describe('getCachedWalletConnectResponse', () => {
   beforeEach(() => {
-    vi.spyOn(store.spendLimits, 'get').mockReturnValue([]);
+    vi.spyOn(store.spendPermissions, 'get').mockReturnValue([]);
     vi.spyOn(store.subAccounts, 'get').mockReturnValue(undefined);
     vi.spyOn(store.account, 'get').mockReturnValue({ accounts: undefined });
   });
@@ -488,7 +507,7 @@ describe('getCachedWalletConnectResponse', () => {
     expect(result).toBeNull();
   });
 
-  it('should return accounts with no capabilities if no spend limits or sub accounts', async () => {
+  it('should return accounts with no capabilities if no spend permissions or sub accounts', async () => {
     vi.spyOn(store.account, 'get').mockReturnValue({ accounts: ['0x123', '0x456'] });
 
     const result = await getCachedWalletConnectResponse();
@@ -498,14 +517,14 @@ describe('getCachedWalletConnectResponse', () => {
           address: '0x123',
           capabilities: {
             subAccounts: undefined,
-            spendLimits: undefined,
+            spendPermissions: undefined,
           },
         },
         {
           address: '0x456',
           capabilities: {
             subAccounts: undefined,
-            spendLimits: undefined,
+            spendPermissions: undefined,
           },
         },
       ],
@@ -533,16 +552,16 @@ describe('getCachedWalletConnectResponse', () => {
                 factoryData: '0xdata',
               },
             ],
-            spendLimits: undefined,
+            spendPermissions: undefined,
           },
         },
       ],
     });
   });
 
-  it('should include spend limits capability if spend limits exist', async () => {
+  it('should include spend permissions capability if spend permissions exist', async () => {
     vi.spyOn(store.account, 'get').mockReturnValue({ accounts: ['0x123'] });
-    vi.spyOn(store.spendLimits, 'get').mockReturnValue([
+    vi.spyOn(store.spendPermissions, 'get').mockReturnValue([
       {
         signature: '0xsig1',
         chainId: 1,
@@ -582,7 +601,7 @@ describe('getCachedWalletConnectResponse', () => {
           address: '0x123',
           capabilities: {
             subAccounts: undefined,
-            spendLimits: {
+            spendPermissions: {
               permissions: [
                 {
                   signature: '0xsig1',
@@ -622,14 +641,14 @@ describe('getCachedWalletConnectResponse', () => {
     });
   });
 
-  it('should include both sub account and spend limits capabilities if both exist', async () => {
+  it('should include both sub account and spend permissions capabilities if both exist', async () => {
     vi.spyOn(store.account, 'get').mockReturnValue({ accounts: ['0x123'] });
     vi.spyOn(store.subAccounts, 'get').mockReturnValue({
       address: '0xsub',
       factory: '0xfactory',
       factoryData: '0xdata',
     });
-    vi.spyOn(store.spendLimits, 'get').mockReturnValue([
+    vi.spyOn(store.spendPermissions, 'get').mockReturnValue([
       {
         signature: '0xsig1',
         chainId: 1,
@@ -660,7 +679,7 @@ describe('getCachedWalletConnectResponse', () => {
                 factoryData: '0xdata',
               },
             ],
-            spendLimits: {
+            spendPermissions: {
               permissions: [
                 {
                   signature: '0xsig1',
