@@ -1,5 +1,7 @@
 # This workflow's name will appear on the GitHub Actions page.
 name: Deploy to Vercel
+permissions:
+  contents: read
 
 # This specifies when the workflow should run.
 on:
