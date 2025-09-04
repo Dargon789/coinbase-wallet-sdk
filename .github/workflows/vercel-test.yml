@@ -11,7 +11,6 @@ on:
       - master
       - main
       - dev
-      
   # This allows you to manually trigger the workflow from the GitHub Actions page.
   workflow_dispatch:
 
@@ -39,16 +38,20 @@ jobs:
 
       # 2. Set up Node.js.
       # The version should match the one in your project.
-    strategy:
-      matrix:
-      node-version: [18.x, 20.x, 22.x]    
   steps:
-  - uses: actions/checkout@v3
-  - name: Use Node.js ${{ matrix.node-version }}
-    uses: actions/setup-node@v4
-    with:
+    - uses: actions/setup-node@v4
+    - name: Setup Node.js
+    - uses: actions/setup-node@v4
+      with:
+      node-version: 18.x,20.x,22.x
+  strategy:
+      matrix:
+      node-version: [18.x, 20.x, 22.x]
+      steps:
+      - uses: actions/setup-node@v4
+  with:
       node-version: ${{ matrix.node-version }}
-
+      
       # 3. Install the Vercel CLI.
       # The Vercel CLI is the main tool for interacting with the Vercel platform.
       with:
@@ -79,4 +82,4 @@ strategy:
     name: Deploy to Vercel
     run: vercel deploy --prebuilt
       env:
-           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
