@@ -17,8 +17,9 @@ jobs:
     executor: my-custom-executor
     steps:
       - checkout
-      - run: |
-          # echo Hello, World!
+      - run:
+          name: Placeholder step
+          command: echo "This job currently has no meaningful steps. Add build, test, or deployment steps here as needed."
 
 workflows:
   my-custom-workflow:
