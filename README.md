@@ -127,7 +127,7 @@
 
 ### Developing locally and running the test dapp
 
-[![Deploy Coinbase Wallet SDK Playground to Pages](https://github.com/Dargon789/coinbase-wallet-sdk/actions/workflows/playground.yml/badge.svg)](https://github.com/Dargon789/coinbase-wallet-sdk/actions/workflows/playground.yml)
+[![Deploy Coinbase Wallet SDK Playground to Pages](https://github.com/coinbase/coinbase-wallet-sdk/actions/workflows/playground.yml/badge.svg)](https://github.com/coinbase/coinbase-wallet-sdk/actions/workflows/playground.yml)
 
 - The Coinbase Wallet SDK test dapp can be viewed here https://coinbase.github.io/coinbase-wallet-sdk/.
 - To run it locally follow these steps:
