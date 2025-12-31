@@ -9,10 +9,6 @@ jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +23,7 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Lint
-        run: yarn lint
+        run: yarn install --immutable && yarn lint
 
   typecheck:
     name: Type Check
