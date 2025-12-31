@@ -1,5 +1,6 @@
 import { store } from ':store/store.js';
 import { TELEMETRY_SCRIPT_CONTENT } from './telemetry-content.js';
+import { VERSION } from '../../sdk-info.js';
 
 export const loadTelemetryScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -37,7 +38,7 @@ const initCCA = () => {
         platform: PlatformName.web,
         projectName: 'base_account_sdk',
         showDebugLogging: false,
-        version: '1.0.0',
+        version: VERSION,
         apiEndpoint: 'https://cca-lite.coinbase.com',
       });
 
