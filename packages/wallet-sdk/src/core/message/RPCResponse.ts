@@ -1,9 +1,9 @@
 import { SerializedEthereumRpcError } from '../error/utils.js';
 
-export type RPCResponseNativeCurrency = {
-  name?: string;
-  symbol?: string;
-  decimal?: number;
+type NativeCurrency = {
+  symbol: string;
+  name: string;
+  decimal: number;
 };
 
 export type RPCResponse = {
@@ -17,7 +17,7 @@ export type RPCResponse = {
   data?: {
     // optional data
     chains?: { [key: number]: string };
+    nativeCurrencies?: { [key: number]: NativeCurrency };
     capabilities?: Record<`0x${string}`, Record<string, unknown>>;
-    nativeCurrencies?: { [key: number]: RPCResponseNativeCurrency };
   };
 };
