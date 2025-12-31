@@ -38,7 +38,7 @@ const initCCA = () => {
         platform: PlatformName.web,
         projectName: 'base_account_sdk',
         showDebugLogging: false,
-        version: '1.0.0',
+        version: VERSION,
         apiEndpoint: 'https://cca-lite.coinbase.com',
       });
 
