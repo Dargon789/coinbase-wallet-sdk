@@ -1,5 +1,6 @@
 import { store } from ':store/store.js';
 import { TELEMETRY_SCRIPT_CONTENT } from './telemetry-content.js';
+import { VERSION } from '../../sdk-info.js';
 
 export const loadTelemetryScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
