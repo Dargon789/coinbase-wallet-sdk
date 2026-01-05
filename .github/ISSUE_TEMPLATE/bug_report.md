@@ -17,6 +17,9 @@ Steps to reproduce the behavior:
 3. Scroll down to '....'
 4. See error
 
+**Code sample**
+If applicable, provide a code sample, a link to a repository, or an executable test case that demonstrates the issue.
+
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
