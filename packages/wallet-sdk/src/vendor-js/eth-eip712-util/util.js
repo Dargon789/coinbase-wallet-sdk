@@ -3,7 +3,7 @@
 
 /* eslint-disable */
 //prettier-ignore
-const createKeccakHash = require('keccak/js')
+const { keccak_256 } = require('@noble/hashes/sha3')
 
 /**
  * Returns a buffer filled with 0s
@@ -24,7 +24,7 @@ function bufferBEFromBigInt(num, length) {
   // Ensure the hex string length is even
   if (hex.length % 2 !== 0) hex = '0' + hex;
   // Convert hex string to a byte array
-  const byteArray = hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16));
+  const byteArray = hex.match(/.{1,2}/g).map(byte => Number.parseInt(byte, 16));
   // Ensure the byte array is of the specified length
   while (byteArray.length < length) {
     byteArray.unshift(0); // Prepend with zeroes if shorter than required length
@@ -138,8 +138,10 @@ function bufferToHex (buf) {
 function keccak (a, bits) {
   a = toBuffer(a)
   if (!bits) bits = 256
-
-  return createKeccakHash('keccak' + bits).update(a).digest()
+  if (bits !== 256) {
+    throw new Error('unsupported')
+  }
+  return Buffer.from(keccak_256(new Uint8Array(a)))
 }
 
 function padToEven (str) {
