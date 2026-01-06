@@ -11,11 +11,11 @@ import {
   Flex,
   FormControl,
   FormErrorMessage,
-  Heading,
   HStack,
-  Input,
+  Heading,
   InputGroup,
   InputLeftAddon,
+  Textarea,
   VStack,
 } from '@chakra-ui/react';
 import React, { useCallback } from 'react';
@@ -23,18 +23,44 @@ import { useForm } from 'react-hook-form';
 import { Chain, hexToNumber } from 'viem';
 import { mainnet } from 'viem/chains';
 
-import { useCBWSDK } from '../../context/CBWSDKReactContextProvider';
+import { useEIP1193Provider } from '../../context/EIP1193ProviderContextProvider';
 import { verifySignMsg } from './method/signMessageMethods';
-import { ADDR_TO_FILL } from './shortcut/const';
+import { ADDR_TO_FILL, CHAIN_ID_TO_FILL } from './shortcut/const';
 import { multiChainShortcutsMap } from './shortcut/multipleChainShortcuts';
 
 type ResponseType = string;
+
+// Replace address placeholders in string or object values
+// biome-ignore lint/suspicious/noExplicitAny: old code
+const replaceAddressInValue = async (value: any, getCurrentAddress: () => Promise<[string]>) => {
+  if (typeof value === 'string' && (value === ADDR_TO_FILL || value === 'YOUR_ADDRESS_HERE')) {
+    const currentAddress = (await getCurrentAddress())[0];
+    return currentAddress;
+  }
+
+  if (typeof value === 'object') {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      const stringified = JSON.stringify(parsed);
+      if (stringified.includes(ADDR_TO_FILL) || stringified.includes('YOUR_ADDRESS_HERE')) {
+        const currentAddress = (await getCurrentAddress())[0];
+        const replaced = stringified
+          .replace(new RegExp(ADDR_TO_FILL, 'g'), currentAddress)
+          .replace(new RegExp('YOUR_ADDRESS_HERE', 'g'), currentAddress);
+        return typeof value === 'object' ? JSON.parse(replaced) : replaced;
+      }
+    } catch (_) {
+      // If parsing fails, return original value
+    }
+  }
+  return value;
+};
 
 export function RpcMethodCard({ format, method, params, shortcuts }) {
   const [response, setResponse] = React.useState<Response | null>(null);
   const [verifyResult, setVerifyResult] = React.useState<string | null>(null);
   const [error, setError] = React.useState<Record<string, unknown> | string | number | null>(null);
-  const { provider } = useCBWSDK();
+  const { provider } = useEIP1193Provider();
 
   const {
     handleSubmit,
@@ -44,7 +70,7 @@ export function RpcMethodCard({ format, method, params, shortcuts }) {
 
   const verify = useCallback(
     async (response: ResponseType, data: Record<string, string>) => {
-      const chainId = await provider.request({ method: 'eth_chainId' });
+      const chainId = (await provider.request({ method: 'eth_chainId' })) as `0x${string}`;
       const chain =
         multiChainShortcutsMap['wallet_switchEthereumChain'].find(
           (shortcut) => Number(shortcut.data.chainId) === hexToNumber(chainId)
@@ -71,31 +97,33 @@ export function RpcMethodCard({ format, method, params, shortcuts }) {
       setVerifyResult(null);
       setResponse(null);
       if (!provider) return;
-      let values = data;
+
+      const dataToSubmit = { ...data };
+      let values = dataToSubmit;
       if (format) {
-        // fill active address to the request
-        const addresses = await provider.request({ method: 'eth_accounts' });
-        for (const key in data) {
+        const getCurrentAddress = async () =>
+          (await provider.request({ method: 'eth_accounts' })) as [string];
+
+        for (const key in dataToSubmit) {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
-            if (data[key] === ADDR_TO_FILL) {
-              data[key] = addresses[0];
+            dataToSubmit[key] = await replaceAddressInValue(dataToSubmit[key], getCurrentAddress);
+
+            if (dataToSubmit[key] === CHAIN_ID_TO_FILL) {
+              const chainId = (await provider.request({ method: 'eth_chainId' })) as string;
+              dataToSubmit[key] = chainId;
             }
           }
         }
-        values = format(data);
+        values = format(dataToSubmit);
       }
       try {
-        // connection required
-        if (!provider?.connected) {
-          await provider.enable();
-        }
-
-        const response = await provider.request({
+        const response = (await provider.request({
           method,
           params: values,
-        });
+          // biome-ignore lint/suspicious/noExplicitAny: old code, refactor soon
+        })) as any;
         setResponse(response);
-        await verify(response, data);
+        await verify(response as string, dataToSubmit);
       } catch (err) {
         const { code, message, data } = err;
         setError({ code, message, data });
@@ -125,17 +153,33 @@ export function RpcMethodCard({ format, method, params, shortcuts }) {
                 <AccordionIcon />
               </AccordionButton>
               <AccordionPanel pb={4}>
-                <VStack spacing={2} mt={2}>
+                <VStack spacing={2} mt={2} align="stretch" width="100%">
                   {params.map((param) => {
                     const err = errors[param.key];
                     return (
                       <FormControl key={param.key} isInvalid={!!err} isRequired={param.required}>
-                        <InputGroup size="sm">
-                          <InputLeftAddon>{param.key}</InputLeftAddon>
-                          <Input
+                        <InputGroup size="sm" flexDirection="column">
+                          <InputLeftAddon width="100%" mb={1}>
+                            {param.key}
+                          </InputLeftAddon>
+                          <Textarea
                             {...register(param.key, {
                               required: param.required ? `${param.key} required` : false,
                             })}
+                            minH="40px"
+                            maxH="none" // No max height limit for vertical resizing
+                            resize="none" // Disable manual resizing
+                            width="100%"
+                            overflow="auto"
+                            maxW="100%"
+                            minW="100%"
+                            whiteSpace="nowrap" // Keep horizontal scrolling
+                            overflowX="auto" // Enable horizontal scrolling
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto'; // Reset height to auto to adjust for content
+                              target.style.height = `${target.scrollHeight}px`; // Set height based on scroll height
+                            }}
                           />
                         </InputGroup>
                         <FormErrorMessage>{err?.message as string}</FormErrorMessage>
@@ -156,9 +200,22 @@ export function RpcMethodCard({ format, method, params, shortcuts }) {
                 <AccordionPanel pb={4}>
                   <HStack spacing={2}>
                     {shortcuts.map((shortcut) => (
-                      <Button key={shortcut.key} onClick={() => submit(shortcut.data)}>
-                        {shortcut.key}
-                      </Button>
+                      <VStack key={shortcut.key} spacing={1}>
+                        <Button onClick={() => submit(shortcut.data)}>{shortcut.key}</Button>
+                        {shortcut.data.message && (
+                          <Button
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                JSON.stringify(shortcut.data.message, null, 2)
+                              )
+                            }
+                            variant="outline"
+                            size="sm"
+                          >
+                            Copy
+                          </Button>
+                        )}
+                      </VStack>
                     ))}
                   </HStack>
                 </AccordionPanel>

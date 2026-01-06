@@ -130,6 +130,45 @@ const ethSignTypedDataV4Shortcuts: (chainId: number) => ShortcutType[] = (chainI
       address: ADDR_TO_FILL,
     },
   },
+  {
+    key: 'Grant Permission',
+    data: {
+      message: {
+        domain: {
+          name: 'Spend Permission Manager',
+          version: '1',
+          chainId: Number(chainId),
+          verifyingContract: '0xf85210B21cC50302F477BA56686d2019dC9b67Ad',
+        },
+        types: {
+          SpendPermission: [
+            { name: 'account', type: 'address' },
+            { name: 'spender', type: 'address' },
+            { name: 'token', type: 'address' },
+            { name: 'allowance', type: 'uint160' },
+            { name: 'period', type: 'uint48' },
+            { name: 'start', type: 'uint48' },
+            { name: 'end', type: 'uint48' },
+            { name: 'salt', type: 'uint256' },
+            { name: 'extraData', type: 'bytes' },
+          ],
+        },
+        primaryType: 'SpendPermission',
+        message: {
+          account: 'YOUR_ADDRESS_HERE',
+          spender: '0xd4e17478581878A967aA22d45a5158A9fE96AA08',
+          token: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+          allowance: '1000000',
+          period: 86400,
+          start: 1724264802,
+          end: 17242884802,
+          salt: '0x1',
+          extraData: '0x',
+        },
+      },
+      address: ADDR_TO_FILL,
+    },
+  },
 ];
 
 export const signMessageShortcutsMap = (chainId: number) => ({

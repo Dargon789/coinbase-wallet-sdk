@@ -1,8 +1,11 @@
-import { CoinbaseWalletProvider } from './CoinbaseWalletProvider';
-import { standardErrorCodes, standardErrors } from './core/error';
-import * as util from './sign/util';
-import { ProviderEventCallback, RequestArguments } from ':core/provider/interface';
-import { AddressString } from ':core/type';
+import { CB_WALLET_RPC_URL } from ':core/constants.js';
+import { standardErrorCodes } from ':core/error/constants.js';
+import { standardErrors } from ':core/error/errors.js';
+import { ProviderEventCallback, RequestArguments } from ':core/provider/interface.js';
+import { store } from ':store/store.js';
+import { CoinbaseWalletProvider } from './CoinbaseWalletProvider.js';
+import * as util from './sign/util.js';
+import * as providerUtil from './util/provider.js';
 
 function createProvider() {
   return new CoinbaseWalletProvider({
@@ -11,35 +14,37 @@ function createProvider() {
   });
 }
 
-const mockHandshake = jest.fn();
-const mockRequest = jest.fn();
-const mockCleanup = jest.fn();
-const mockFetchSignerType = jest.spyOn(util, 'fetchSignerType');
-const mockStoreSignerType = jest.spyOn(util, 'storeSignerType');
-const mockLoadSignerType = jest.spyOn(util, 'loadSignerType');
+const mockHandshake = vi.fn();
+const mockRequest = vi.fn();
+const mockCleanup = vi.fn();
+const mockFetchRPCRequest = vi.fn();
+const mockFetchSignerType = vi.spyOn(util, 'fetchSignerType');
+const mockStoreSignerType = vi.spyOn(util, 'storeSignerType');
+const mockLoadSignerType = vi.spyOn(util, 'loadSignerType');
 
 let provider: CoinbaseWalletProvider;
 let callback: ProviderEventCallback;
 
 beforeEach(() => {
-  jest.resetAllMocks();
-  jest.spyOn(util, 'createSigner').mockImplementation((params) => {
+  vi.resetAllMocks();
+  vi.spyOn(util, 'createSigner').mockImplementation((params) => {
     callback = params.callback;
     return {
-      accounts: [AddressString('0x123')],
+      accounts: ['0x123'],
       chainId: 1,
       handshake: mockHandshake,
       request: mockRequest,
       cleanup: mockCleanup,
     };
   });
+  vi.spyOn(providerUtil, 'fetchRPCRequest').mockImplementation(mockFetchRPCRequest);
 
   provider = createProvider();
 });
 
 describe('Event handling', () => {
   it('emits disconnect event on user initiated disconnection', async () => {
-    const disconnectListener = jest.fn();
+    const disconnectListener = vi.fn();
     provider.on('disconnect', disconnectListener);
 
     await provider.disconnect();
@@ -50,7 +55,7 @@ describe('Event handling', () => {
   });
 
   it('should emit chainChanged event on chainId change', async () => {
-    const chainChangedListener = jest.fn();
+    const chainChangedListener = vi.fn();
     provider.on('chainChanged', chainChangedListener);
 
     await provider.request({ method: 'eth_requestAccounts' });
@@ -60,7 +65,7 @@ describe('Event handling', () => {
   });
 
   it('should emit accountsChanged event on account change', async () => {
-    const accountsChangedListener = jest.fn();
+    const accountsChangedListener = vi.fn();
     provider.on('accountsChanged', accountsChangedListener);
 
     await provider.request({ method: 'eth_requestAccounts' });
@@ -95,6 +100,29 @@ describe('Request Handling', () => {
   });
 });
 
+describe('Ephemeral methods', () => {
+  it('should post requests to wallet rpc url for wallet_getCallsStatus', async () => {
+    const args = { method: 'wallet_getCallsStatus' };
+    expect(provider['signer']).toBeNull();
+    await provider.request(args);
+    expect(mockFetchRPCRequest).toHaveBeenCalledWith(args, CB_WALLET_RPC_URL);
+    expect(provider['signer']).toBeNull();
+  });
+
+  it.each(['wallet_sendCalls', 'wallet_sign'])(
+    'should perform a successful request after handshake',
+    async (method) => {
+      const args = { method, params: ['0xdeadbeef'] };
+      expect(provider['signer']).toBeNull();
+      await provider.request(args);
+      expect(mockHandshake).toHaveBeenCalledWith({ method: 'handshake' });
+      expect(mockRequest).toHaveBeenCalledWith(args);
+      expect(mockCleanup).toHaveBeenCalled();
+      expect(provider['signer']).toBeNull();
+    }
+  );
+});
+
 describe('Signer configuration', () => {
   it('should complete signerType selection correctly', async () => {
     mockFetchSignerType.mockResolvedValue('scw');
@@ -106,7 +134,7 @@ describe('Signer configuration', () => {
 
   it('should support enable', async () => {
     mockFetchSignerType.mockResolvedValue('scw');
-    jest.spyOn(console, 'warn').mockImplementation();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await provider.enable();
     expect(mockHandshake).toHaveBeenCalledWith({ method: 'eth_requestAccounts' });
@@ -181,5 +209,17 @@ describe('Signer configuration', () => {
     await provider.disconnect();
     expect(mockCleanup).toHaveBeenCalled();
     expect(provider['signer']).toBeNull();
+  });
+
+  describe('Auto sub account', () => {
+    it('call handshake without method when enableAutoSubAccounts is true', async () => {
+      mockLoadSignerType.mockReturnValue('scw');
+      vi.spyOn(store.subAccountsConfig, 'get').mockReturnValue({
+        enableAutoSubAccounts: true,
+      });
+
+      await provider.request({ method: 'eth_requestAccounts' });
+      expect(mockHandshake).toHaveBeenCalledWith({ method: 'handshake' });
+    });
   });
 });

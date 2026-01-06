@@ -33,11 +33,19 @@ yarn-error.log*
 examples/**/yarn.lock
 
 .pnp.*
-.yarn
-!.yarn/releases
+.yarn/install-state.gz
+.yarn/cache
 !.yarn/plugins
 !.yarn/sdks
 !.yarn/versions
 
 # next.js
 .next
+
+<<<<<<< Updated upstream
+/**/tsconfig.tsbuildinfo
+=======
+tsconfig.tsbuildinfo
+.vercel
+.env*.local
+>>>>>>> Stashed changes

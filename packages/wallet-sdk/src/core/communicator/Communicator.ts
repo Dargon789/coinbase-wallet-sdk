@@ -1,9 +1,15 @@
-import { LIB_VERSION } from '../../version';
-import { ConfigMessage, Message, MessageID } from '../message';
-import { CB_KEYS_URL } from ':core/constants';
-import { standardErrors } from ':core/error';
-import { AppMetadata, Preference } from ':core/provider/interface';
-import { closePopup, openPopup } from ':util/web';
+import { CB_KEYS_URL } from ':core/constants.js';
+import { standardErrors } from ':core/error/errors.js';
+import { AppMetadata, Preference } from ':core/provider/interface.js';
+import {
+  logPopupSetupCompleted,
+  logPopupSetupStarted,
+  logPopupUnloadReceived,
+} from ':core/telemetry/events/communicator.js';
+import { closePopup, openPopup } from ':util/web.js';
+import { VERSION } from '../../sdk-info.js';
+import { ConfigMessage } from '../message/ConfigMessage.js';
+import { Message, MessageID } from '../message/Message.js';
 
 export type CommunicatorOptions = {
   url?: string;
@@ -98,10 +104,14 @@ export class Communicator {
       return this.popup;
     }
 
-    this.popup = openPopup(this.url);
+    logPopupSetupStarted();
+    this.popup = await openPopup(this.url);
 
     this.onMessage<ConfigMessage>(({ event }) => event === 'PopupUnload')
-      .then(this.disconnect)
+      .then(() => {
+        this.disconnect();
+        logPopupUnloadReceived();
+      })
       .catch(() => {});
 
     return this.onMessage<ConfigMessage>(({ event }) => event === 'PopupLoaded')
@@ -109,14 +119,16 @@ export class Communicator {
         this.postMessage({
           requestId: message.id,
           data: {
-            version: LIB_VERSION,
+            version: VERSION,
             metadata: this.metadata,
             preference: this.preference,
+            location: window.location.toString(),
           },
         });
       })
       .then(() => {
         if (!this.popup) throw standardErrors.rpc.internal();
+        logPopupSetupCompleted();
         return this.popup;
       });
   };

@@ -1,4 +1,4 @@
-import { errorValues, standardErrorCodes } from './constants';
+import { errorValues, standardErrorCodes } from './constants.js';
 
 const FALLBACK_MESSAGE = 'Unspecified error message.';
 
@@ -53,10 +53,10 @@ export function isValidCode(code: number): boolean {
 export function getErrorCode(error: unknown): number | undefined {
   if (typeof error === 'number') {
     return error;
-  } else if (isErrorWithCode(error)) {
+  } 
+  if (isErrorWithCode(error)) {
     return error.code ?? error.errorCode;
   }
-
   return undefined;
 }
 

@@ -1,4 +1,4 @@
-import { ServerMessage } from '../type/ServerMessage';
+import { ServerMessage } from '../type/ServerMessage.js';
 
 export class WalletLinkHTTP {
   private readonly auth: string;
@@ -23,7 +23,7 @@ export class WalletLinkHTTP {
           },
         })
       )
-    ).catch((error) => console.error('Unabled to mark event as failed:', error));
+    ).catch((error) => console.error('Unable to mark events as seen:', error));
   }
 
   async fetchUnseenEvents(): Promise<ServerMessage<'Event'>[]> {

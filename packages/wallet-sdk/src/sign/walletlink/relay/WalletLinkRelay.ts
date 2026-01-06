@@ -1,25 +1,25 @@
 // Copyright (c) 2018-2023 Coinbase, Inc. <https://www.coinbase.com/>
 
+import { standardErrors } from ':core/error/errors.js';
+import { AppMetadata } from ':core/provider/interface.js';
+import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage.js';
+import { Address } from ':core/type/index.js';
+import { bigIntStringFromBigInt, hexStringFromBuffer, randomBytesHex } from ':core/type/util.js';
 import {
-  WalletLinkConnection,
-  WalletLinkConnectionUpdateListener,
-} from './connection/WalletLinkConnection';
-import { LOCAL_STORAGE_ADDRESSES_KEY } from './constants';
-import { RelayEventManager } from './RelayEventManager';
-import { EthereumTransactionParams } from './type/EthereumTransactionParams';
-import { WalletLinkEventData } from './type/WalletLinkEventData';
-import { WalletLinkSession } from './type/WalletLinkSession';
-import { Web3Method, Web3Request } from './type/Web3Request';
-import { isErrorResponse, Web3Response } from './type/Web3Response';
-import { isMobileWeb } from './ui/components/util';
-import { RelayUI } from './ui/RelayUI';
-import { WalletLinkRelayUI } from './ui/WalletLinkRelayUI';
-import { WLMobileRelayUI } from './ui/WLMobileRelayUI';
-import { standardErrors } from ':core/error';
-import { AppMetadata } from ':core/provider/interface';
-import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage';
-import { AddressString } from ':core/type';
-import { bigIntStringFromBigInt, hexStringFromBuffer, randomBytesHex } from ':core/type/util';
+    WalletLinkConnection,
+    WalletLinkConnectionUpdateListener,
+} from './connection/WalletLinkConnection.js';
+import { LOCAL_STORAGE_ADDRESSES_KEY } from './constants.js';
+import { RelayEventManager } from './RelayEventManager.js';
+import { EthereumTransactionParams } from './type/EthereumTransactionParams.js';
+import { WalletLinkEventData } from './type/WalletLinkEventData.js';
+import { WalletLinkSession } from './type/WalletLinkSession.js';
+import { Web3Method, Web3Request } from './type/Web3Request.js';
+import { isErrorResponse, Web3Response } from './type/Web3Response.js';
+import { isMobileWeb } from './ui/components/util.js';
+import { RelayUI } from './ui/RelayUI.js';
+import { WalletLinkRelayUI } from './ui/WalletLinkRelayUI.js';
+import { WLMobileRelayUI } from './ui/WLMobileRelayUI.js';
 
 export interface WalletLinkRelayOptions {
   linkAPIUrl: string;
@@ -97,7 +97,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
     this.isUnlinkedErrorState = false;
 
     if (cachedAddresses) {
-      const addresses = cachedAddresses.split(' ') as AddressString[];
+      const addresses = cachedAddresses.split(' ') as string[];
       const wasConnectedViaStandalone = this.storage.getItem('IsStandaloneSigning') === 'true';
       if (addresses[0] !== '' && !linked && this._session.linked && !wasConnectedViaStandalone) {
         this.isUnlinkedErrorState = true;
@@ -137,7 +137,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
       Array.from(WalletLinkRelay.accountRequestCallbackIds.values()).forEach((id) => {
         this.invokeCallback(id, {
           method: 'requestEthereumAccounts',
-          result: [selectedAddress as AddressString],
+          result: [selectedAddress as Address],
         });
       });
       WalletLinkRelay.accountRequestCallbackIds.clear();
@@ -241,7 +241,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
         hideSnackbarItem = this.ui.showConnecting({
           isUnlinkedErrorState: this.isUnlinkedErrorState,
           onCancel: cancel,
-          onResetConnection: this.resetAndReload, // eslint-disable-line @typescript-eslint/unbound-method
+          onResetConnection: this.resetAndReload,
         });
       }
 
@@ -260,6 +260,13 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
 
   private publishWeb3RequestEvent(id: string, request: Web3Request): void {
     const message: WalletLinkEventData = { type: 'WEB3_REQUEST', id, request };
+    
+    // Fire deeplink immediately for mobile web to avoid Safari popup blocking
+    if (this.isMobileWeb) {
+      this.openCoinbaseWalletDeeplink(request.method);
+    }
+    
+    // Then publish the event asynchronously
     this.publishEvent('Web3Request', message, true)
       .then((_) => {})
       .catch((err) => {
@@ -268,10 +275,6 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
           errorMessage: err.message,
         });
       });
-
-    if (this.isMobileWeb) {
-      this.openCoinbaseWalletDeeplink(request.method);
-    }
   }
 
   // copied from MobileRelay
@@ -359,7 +362,6 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
 
     return new Promise<Web3Response<'requestEthereumAccounts'>>((resolve, reject) => {
       this.relayEventManager.callbacks.set(id, (response) => {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
         hideSnackbarItem?.();
         if (isErrorResponse(response)) {
@@ -407,7 +409,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
       hideSnackbarItem = this.ui.showConnecting({
         isUnlinkedErrorState: this.isUnlinkedErrorState,
         onCancel: cancel,
-        onResetConnection: this.resetAndReload, // eslint-disable-line @typescript-eslint/unbound-method
+        onResetConnection: this.resetAndReload,
       });
     }
 
@@ -462,7 +464,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
       hideSnackbarItem = this.ui.showConnecting({
         isUnlinkedErrorState: this.isUnlinkedErrorState,
         onCancel: cancel,
-        onResetConnection: this.resetAndReload, // eslint-disable-line @typescript-eslint/unbound-method
+        onResetConnection: this.resetAndReload,
       });
     }
 
@@ -505,7 +507,7 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
       hideSnackbarItem = this.ui.showConnecting({
         isUnlinkedErrorState: this.isUnlinkedErrorState,
         onCancel: cancel,
-        onResetConnection: this.resetAndReload, // eslint-disable-line @typescript-eslint/unbound-method
+        onResetConnection: this.resetAndReload,
       });
     }
 
@@ -519,7 +521,8 @@ export class WalletLinkRelay implements WalletLinkConnectionUpdateListener {
               message: `Unrecognized chain ID. Try adding the chain using addEthereumChain first.`,
             })
           );
-        } else if (isErrorResponse(response)) {
+        } 
+        if (isErrorResponse(response)) {
           return reject(new Error(response.errorMessage));
         }
 

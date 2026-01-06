@@ -1,6 +1,10 @@
-import { LIB_VERSION } from '../version';
-import { standardErrors } from ':core/error';
-import { ConstructorOptions, ProviderInterface, RequestArguments } from ':core/provider/interface';
+import { NAME, VERSION } from '../sdk-info.js';
+import { standardErrors } from ':core/error/errors.js';
+import {
+  ConstructorOptions,
+  ProviderInterface,
+  RequestArguments,
+} from ':core/provider/interface.js';
 
 export async function fetchRPCRequest(request: RequestArguments, rpcUrl: string) {
   const requestBody = {
@@ -12,7 +16,11 @@ export async function fetchRPCRequest(request: RequestArguments, rpcUrl: string)
     method: 'POST',
     body: JSON.stringify(requestBody),
     mode: 'cors',
-    headers: { 'Content-Type': 'application/json', 'X-Cbw-Sdk-Version': LIB_VERSION },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Cbw-Sdk-Version': VERSION,
+      'X-Cbw-Sdk-Platform': NAME,
+    },
   });
   const { result, error } = await res.json();
   if (error) throw error;
@@ -48,17 +56,19 @@ export function getCoinbaseInjectedProvider({
   metadata,
   preference,
 }: Readonly<ConstructorOptions>): ProviderInterface | undefined {
+  const { appName, appLogoUrl, appChainIds } = metadata;
+
   if (preference.options !== 'smartWalletOnly') {
     const extension = getCoinbaseInjectedLegacyProvider();
     if (extension) {
-      const { appName, appLogoUrl, appChainIds } = metadata;
-      extension.setAppInfo?.(appName, appLogoUrl, appChainIds);
+      extension.setAppInfo?.(appName, appLogoUrl, appChainIds, preference);
       return extension;
     }
   }
 
   const ethereum = getInjectedEthereum();
   if (ethereum?.isCoinbaseBrowser) {
+    ethereum.setAppInfo?.(appName, appLogoUrl, appChainIds, preference);
     return ethereum;
   }
 
