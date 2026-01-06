@@ -1,5 +1,5 @@
 import { Preference } from ':core/provider/interface.js';
-import { SubAccountSigner } from ':features/sub-accounts/types.js';
+import { ToOwnerAccountFn } from ':store/store.js';
 
 /**
  * Validates user supplied preferences. Throws if keys are not valid.
@@ -22,22 +22,20 @@ export function validatePreferences(preference?: Preference) {
       throw new Error(`Attribution cannot contain both auto and dataSuffix properties`);
     }
   }
+
+  if (preference.telemetry) {
+    if (typeof preference.telemetry !== 'boolean') {
+      throw new Error(`Telemetry must be a boolean`);
+    }
+  }
 }
 
 /**
- * Validates user supplied subaccount. Throws if keys are not valid.
- * @param subaccount
+ * Validates user supplied toSubAccountSigner function. Throws if keys are not valid.
+ * @param toAccount
  */
-export function validateSubAccount(subaccount: SubAccountSigner) {
-  if (!['webAuthn', 'privateKey'].includes(subaccount.type)) {
-    throw new Error(`Invalid subaccount type: ${subaccount.type}`);
-  }
-
-  if (typeof subaccount.getSigner !== 'function') {
-    throw new Error(`getSigner is not a function`);
-  }
-
-  if (typeof subaccount.getAddress !== 'function') {
-    throw new Error(`getAddress is not a function`);
+export function validateSubAccount(toAccount: ToOwnerAccountFn) {
+  if (typeof toAccount !== 'function') {
+    throw new Error(`toAccount is not a function`);
   }
 }

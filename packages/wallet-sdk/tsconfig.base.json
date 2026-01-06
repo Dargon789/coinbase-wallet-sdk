@@ -14,10 +14,10 @@
     "paths": {
       ":util/*": ["src/util/*"],
       ":core/*": ["src/core/*"],
+      ":store/*": ["src/store/*"],
       ":sign/*": ["src/sign/*"],
-      ":features/*": ["src/features/*"]
     },
-    "target": "es2020",
+    "target": "es2017",
     "jsx": "react",
     "jsxFactory": "h",
     "esModuleInterop": true,
