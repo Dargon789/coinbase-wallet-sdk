@@ -5,10 +5,13 @@ export default defineConfig({
   test: {
     alias: {
       ':core': path.resolve(__dirname, 'src/core'),
+      ':store': path.resolve(__dirname, 'src/store'),
+      ':sign': path.resolve(__dirname, 'src/sign'),
       ':util': path.resolve(__dirname, 'src/util'),
       ':sign': path.resolve(__dirname, 'src/sign'),
     },
     environment: 'jsdom',
     globals: true,
+    setupFiles: ['./vitest.setup.ts'],
   },
 });
