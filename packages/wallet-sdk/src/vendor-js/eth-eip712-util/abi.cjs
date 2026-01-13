@@ -6,7 +6,7 @@
 const util = require('./util.cjs')
 
 // Convert from short to canonical names
-// FIXME: optimise or make this nicer?
+// FIXME: optimism or make this nicer?
 function elementaryName (name) {
   if (name.startsWith('int[')) {
     return 'int256' + name.slice(3)
