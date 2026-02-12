@@ -31,7 +31,7 @@
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "clsx": "^2.1.1",
     "coinbase-wallet-sdk": "^0.0.1-security",
-    "next": "^15.4.10",
+    "next": "^16.1.5",
     "preact": "^10.28.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
