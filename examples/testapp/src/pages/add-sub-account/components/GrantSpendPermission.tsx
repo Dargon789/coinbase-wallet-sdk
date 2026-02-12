@@ -99,8 +99,8 @@ export function GrantSpendPermission({
         token: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
         allowance: '0x5AF3107A4000',
         period: 86400,
-        start: 1724264802,
-        end: 17242884802,
+        start: Math.floor(Date.now() / 1000),
+        end: Math.floor(Date.now() / 1000) + 86400 * 365, // 1 year from now
         salt: '0x1',
         extraData: '0x',
       } as const;
