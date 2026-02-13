@@ -42,10 +42,4 @@ examples/**/yarn.lock
 # next.js
 .next
 
-<<<<<<< Updated upstream
 /**/tsconfig.tsbuildinfo
-=======
-tsconfig.tsbuildinfo
-.vercel
-.env*.local
->>>>>>> Stashed changes
