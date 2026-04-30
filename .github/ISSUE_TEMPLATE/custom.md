@@ -1,6 +1,6 @@
 ---
 name: Custom issue template
-about: Describe this issue template's purpose here.
+about: Open a blank issue for general inquiries or topics not covered by other templates.
 title: ''
 labels: ''
 assignees: ''
