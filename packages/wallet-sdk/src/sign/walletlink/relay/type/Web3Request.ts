@@ -1,11 +1,9 @@
 // Copyright (c) 2018-2023 Coinbase, Inc. <https://www.coinbase.com/>
 
-import { Web3Method } from './Web3Method';
-import { AddressString, BigIntString, HexString, IntNumber, RegExpString } from ':core/type';
+import { Address, BigIntString, HexString, IntNumber } from ':core/type/index.js';
 
+export type Web3Method = _Web3Request['method'];
 export type Web3Request<M extends Web3Method = Web3Method> = Extract<_Web3Request, { method: M }>;
-
-export type SupportedWeb3Method = Extract<Web3Method, _Web3Request['method']>;
 
 type _Web3Request =
   | {
@@ -60,7 +58,7 @@ type _Web3Request =
       method: 'signEthereumMessage';
       params: {
         message: HexString;
-        address: AddressString;
+        address: Address;
         addPrefix: boolean;
         typedDataJson: string | null;
       };
@@ -68,8 +66,8 @@ type _Web3Request =
   | {
       method: 'signEthereumTransaction';
       params: {
-        fromAddress: AddressString;
-        toAddress: AddressString | null;
+        fromAddress: Address;
+        toAddress: Address | null;
         weiValue: BigIntString;
         data: HexString;
         nonce: IntNumber | null;
@@ -77,7 +75,7 @@ type _Web3Request =
         maxFeePerGas: BigIntString | null; // in wei
         maxPriorityFeePerGas: BigIntString | null; // in wei
         gasLimit: BigIntString | null;
-        chainId: IntNumber;
+        chainId: number;
         shouldSubmit: boolean;
       };
     }
@@ -85,7 +83,7 @@ type _Web3Request =
       method: 'submitEthereumTransaction';
       params: {
         signedTransaction: HexString;
-        chainId: IntNumber;
+        chainId: number;
       };
     }
   | {
@@ -94,19 +92,6 @@ type _Web3Request =
         message: HexString;
         signature: HexString;
         addPrefix: boolean;
-      };
-    }
-  | {
-      method: 'scanQRCode';
-      params: {
-        regExp: RegExpString;
-      };
-    }
-  | {
-      method: 'generic';
-      params: {
-        action: string;
-        data: object;
       };
     }
   | {

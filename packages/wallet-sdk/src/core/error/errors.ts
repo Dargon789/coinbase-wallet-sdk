@@ -1,4 +1,6 @@
-import { errorValues, standardErrorCodes } from './constants';
+import { Address, HttpRequestError } from 'viem';
+import { standardErrorCodes } from './constants.js';
+import { getMessageFromCode } from './utils.js';
 
 export const standardErrors = {
   rpc: {
@@ -88,28 +90,6 @@ export const standardErrors = {
 
 // Internal
 
-function isJsonRpcServerError(code: number): boolean {
-  return code >= -32099 && code <= -32000;
-}
-
-function hasKey(obj: Record<string, unknown>, key: string) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-function getMessageFromCode(code: number | undefined): string {
-  if (code && Number.isInteger(code)) {
-    const codeString = code.toString();
-
-    if (hasKey(errorValues, codeString)) {
-      return errorValues[codeString as keyof typeof errorValues].message;
-    }
-    if (isJsonRpcServerError(code)) {
-      return 'Unspecified server error.';
-    }
-  }
-  return 'Unspecified error message.';
-}
-
 function getEthJsonRpcError<T>(code: number, arg?: EthErrorsArg<T>): EthereumRpcError<T> {
   const [message, data] = parseOpts(arg);
   return new EthereumRpcError(code, message || getMessageFromCode(code), data);
@@ -124,7 +104,8 @@ function parseOpts<T>(arg?: EthErrorsArg<T>): [string?, T?] {
   if (arg) {
     if (typeof arg === 'string') {
       return [arg];
-    } else if (typeof arg === 'object' && !Array.isArray(arg)) {
+    }
+    if (typeof arg === 'object' && !Array.isArray(arg)) {
       const { message, data } = arg;
 
       if (message && typeof message !== 'string') {
@@ -184,6 +165,59 @@ class EthereumProviderError<T> extends EthereumRpcError<T> {
   }
 }
 
+export type InsufficientBalanceErrorData = {
+  type: 'INSUFFICIENT_FUNDS';
+  reason: 'NO_SUITABLE_SPEND_PERMISSION_FOUND' | 'SPEND_PERMISSION_ALLOWANCE_EXCEEDED';
+  account: {
+    address: Address;
+  };
+  /**
+   * The amount of each token that is required to send the transaction.
+   */
+  required: Record<
+    Address,
+    {
+      amount: `0x${string}`;
+      /**
+       * Sources of funds available to the account with sufficient balance to cover the required amount
+       */
+      sources: { address: Address; balance: `0x${string}` }[];
+    }
+  >;
+};
+
+class ActionableInsufficientBalanceError extends EthereumRpcError<InsufficientBalanceErrorData> {}
+
 function isValidEthProviderCode(code: number): boolean {
   return Number.isInteger(code) && code >= 1000 && code <= 4999;
+}
+
+export function isActionableHttpRequestError(
+  errorObject: unknown
+): errorObject is ActionableInsufficientBalanceError {
+  return (
+    typeof errorObject === 'object' &&
+    errorObject !== null &&
+    'code' in errorObject &&
+    'data' in errorObject &&
+    errorObject.code === -32090 &&
+    typeof errorObject.data === 'object' &&
+    errorObject.data !== null &&
+    'type' in errorObject.data &&
+    errorObject.data.type === 'INSUFFICIENT_FUNDS'
+  );
+}
+
+export function isViemError(error: unknown): error is HttpRequestError {
+  // Check if object and has code, message, and details
+  return typeof error === 'object' && error !== null && 'details' in error;
+}
+
+export function viemHttpErrorToProviderError(error: HttpRequestError) {
+  try {
+    const details = JSON.parse(error.details);
+    return new EthereumRpcError(details.code, details.message, details.data);
+  } catch (_) {
+    return null;
+  }
 }

@@ -1,32 +1,20 @@
 // Copyright (c) 2018-2023 Coinbase, Inc. <https://www.coinbase.com/>
 
-import { Web3Request } from './Web3Request';
-import { Web3Response } from './Web3Response';
+import { Web3Request } from './Web3Request.js';
+import { Web3Response } from './Web3Response.js';
 
-type Type =
-  | 'SESSION_ID_REQUEST'
-  | 'SESSION_ID_RESPONSE'
-  | 'LINKED'
-  | 'UNLINKED'
-  | 'WEB3_REQUEST'
-  | 'WEB3_REQUEST_CANCELED'
-  | 'WEB3_RESPONSE';
-
-export type WalletLinkEventData = {
-  type: Type;
-  id: string;
-} & (
+export type WalletLinkEventData =
   | {
       type: 'WEB3_RESPONSE';
+      id: string;
       response: Web3Response;
     }
   | {
       type: 'WEB3_REQUEST';
+      id: string;
       request: Web3Request;
     }
   | {
       type: 'WEB3_REQUEST_CANCELED';
-    }
-);
-
-export type WalletLinkResponseEventData = Extract<WalletLinkEventData, { type: 'WEB3_RESPONSE' }>;
+      id: string;
+    };

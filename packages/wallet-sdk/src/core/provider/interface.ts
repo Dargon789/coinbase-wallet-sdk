@@ -1,4 +1,6 @@
+import { ToOwnerAccountFn } from ':store/store.js';
 import { EventEmitter } from 'eventemitter3';
+import { Address, Hex } from 'viem';
 
 export interface RequestArguments {
   readonly method: string;
@@ -11,24 +13,35 @@ export interface ProviderRpcError extends Error {
   data?: unknown;
 }
 
-interface ProviderMessage {
-  type: string;
-  data: unknown;
-}
-
 interface ProviderConnectInfo {
   readonly chainId: string;
 }
 
-export interface ProviderInterface extends EventEmitter {
-  request<T>(args: RequestArguments): Promise<T>;
+type ProviderEventMap = {
+  connect: ProviderConnectInfo;
+  disconnect: ProviderRpcError;
+  chainChanged: string; // hex string
+  accountsChanged: string[];
+};
+
+export class ProviderEventEmitter extends EventEmitter<keyof ProviderEventMap> {}
+
+export interface ProviderInterface extends ProviderEventEmitter {
+  request(args: RequestArguments): Promise<unknown>;
   disconnect(): Promise<void>;
-  on(event: 'connect', listener: (info: ProviderConnectInfo) => void): this;
-  on(event: 'disconnect', listener: (error: ProviderRpcError) => void): this;
-  on(event: 'chainChanged', listener: (chainId: string) => void): this;
-  on(event: 'accountsChanged', listener: (accounts: string[]) => void): this;
-  on(event: 'message', listener: (message: ProviderMessage) => void): this;
+  emit<K extends keyof ProviderEventMap>(event: K, ...args: [ProviderEventMap[K]]): boolean;
+  on<K extends keyof ProviderEventMap>(event: K, listener: (_: ProviderEventMap[K]) => void): this;
 }
+
+export type ProviderEventCallback = ProviderInterface['emit'];
+
+export type SpendPermissionConfig = {
+  token: Address;
+  allowance: Hex;
+  period: number;
+  salt?: Hex;
+  extraData?: Hex;
+};
 
 export interface AppMetadata {
   /** Application name */
@@ -39,12 +52,54 @@ export interface AppMetadata {
   appChainIds: number[];
 }
 
-export interface Preference {
-  options: 'all' | 'smartWalletOnly' | 'eoaOnly';
+export type Attribution =
+  | {
+      auto: boolean;
+      dataSuffix?: never;
+    }
+  | {
+      auto?: never;
+      dataSuffix: `0x${string}`;
+    };
+
+export type Preference = {
+  /**
+   * The URL for the keys popup.
+   * By default, `https://keys.coinbase.com/connect` is used for production. Use `https://keys-dev.coinbase.com/connect` for development environments.
+   * @type {string}
+   */
   keysUrl?: string;
-}
+  /**
+   * @param options
+   */
+  options: 'all' | 'smartWalletOnly' | 'eoaOnly';
+  /**
+   * @param attribution
+   * @type {Attribution}
+   * @note Smart Wallet only
+   * @description This option only applies to Coinbase Smart Wallet. When a valid data suffix is supplied, it is appended to the initCode and executeBatch calldata.
+   * Coinbase Smart Wallet expects a 16 byte hex string. If the data suffix is not a 16 byte hex string, the Smart Wallet will ignore the property. If auto is true,
+   * the Smart Wallet will generate a 16 byte hex string from the apps origin.
+   */
+  attribution?: Attribution;
+  /**
+   * Whether to enable functional telemetry.
+   * @default true
+   */
+  telemetry?: boolean;
+} & Record<string, unknown>;
+
+export type SubAccountOptions = {
+  /* Automatically create a subaccount for the user and use it for all transactions. */
+  enableAutoSubAccounts?: boolean;
+  /**
+   * @returns The owner account that will be used to sign the subaccount transactions.
+   */
+  toOwnerAccount?: ToOwnerAccountFn;
+};
 
 export interface ConstructorOptions {
   metadata: AppMetadata;
   preference: Preference;
+  paymasterUrls?: Record<number, string>;
 }

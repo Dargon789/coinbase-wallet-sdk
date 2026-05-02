@@ -1,40 +1,43 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { vi } from 'vitest';
 
-import { WalletLinkCipher } from './connection/WalletLinkCipher';
-import { WalletLinkConnection } from './connection/WalletLinkConnection';
-import { WalletLinkWebSocket } from './connection/WalletLinkWebSocket';
-import { WALLET_USER_NAME_KEY } from './RelayAbstract';
-import { ServerMessage } from './type/ServerMessage';
-import { WalletLinkSessionConfig } from './type/WalletLinkSessionConfig';
-import { WalletLinkRelay, WalletLinkRelayOptions } from './WalletLinkRelay';
-import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage';
+import { WalletLinkCipher } from './connection/WalletLinkCipher.js';
+import { WalletLinkConnection } from './connection/WalletLinkConnection.js';
+import { WalletLinkWebSocket } from './connection/WalletLinkWebSocket.js';
+import { WALLET_USER_NAME_KEY } from './constants.js';
+import { ServerMessage } from './type/ServerMessage.js';
+import { WalletLinkRelay, WalletLinkRelayOptions } from './WalletLinkRelay.js';
+import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage.js';
 
-const decryptMock = jest.fn().mockImplementation((text) => Promise.resolve(`"decrypted ${text}"`));
+const decryptMock = vi.fn().mockImplementation((text) => text);
 
-jest.spyOn(WalletLinkCipher.prototype, 'decrypt').mockImplementation(decryptMock);
+vi.spyOn(WalletLinkCipher.prototype, 'decrypt').mockImplementation(decryptMock);
 
 describe('WalletLinkRelay', () => {
   const options: WalletLinkRelayOptions = {
     linkAPIUrl: 'http://link-api-url',
     storage: new ScopedLocalStorage('walletlink', 'test'),
+    metadata: {
+      appName: 'test app',
+      appLogoUrl: '',
+      appChainIds: [],
+    },
+    accountsCallback: vi.fn(),
+    chainCallback: vi.fn(),
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(WalletLinkWebSocket.prototype, 'connect').mockReturnValue(Promise.resolve());
+    vi.clearAllMocks();
+    vi.spyOn(WalletLinkWebSocket.prototype, 'connect').mockReturnValue(Promise.resolve());
   });
 
   describe('resetAndReload', () => {
     it('should destroy the connection and connect again', async () => {
-      const setSessionMetadataSpy = jest.spyOn(
-        WalletLinkConnection.prototype,
-        'setSessionMetadata'
-      );
+      const destroySpy = vi.spyOn(WalletLinkConnection.prototype, 'destroy');
 
       const relay = new WalletLinkRelay(options);
       relay.resetAndReload();
 
-      expect(setSessionMetadataSpy).toHaveBeenCalled();
+      expect(destroySpy).toHaveBeenCalled();
     });
   });
 
@@ -45,25 +48,23 @@ describe('WalletLinkRelay', () => {
         sessionId: 'sessionId',
         eventId: 'eventId',
         event: 'Web3Response',
-        data: 'data',
-      };
-
-      jest.spyOn(JSON, 'parse').mockImplementation(() => {
-        return {
+        data: JSON.stringify({
+          id: 137,
           type: 'WEB3_RESPONSE',
-          data: 'decrypted data',
-        };
-      });
+          response: 'response mock',
+        }),
+      };
 
       const relay = new WalletLinkRelay(options);
 
-      const handleWeb3ResponseMessageSpy = jest.spyOn(relay, 'handleWeb3ResponseMessage');
+      const handleWeb3ResponseMessageSpy = vi
+        .spyOn(relay, 'handleWeb3ResponseMessage')
+        .mockReturnValue();
 
       (relay as any).connection.ws.incomingDataListener?.(serverMessageEvent);
 
-      expect(handleWeb3ResponseMessageSpy).toHaveBeenCalledWith(
-        JSON.parse(await decryptMock(serverMessageEvent.data))
-      );
+      const message = JSON.parse(await decryptMock(serverMessageEvent.data));
+      expect(handleWeb3ResponseMessageSpy).toHaveBeenCalledWith(message.id, message.response);
     });
 
     it('should set isLinked with LinkedListener', async () => {
@@ -81,7 +82,7 @@ describe('WalletLinkRelay', () => {
 
   describe('setSessionConfigListener', () => {
     it('should update metadata with setSessionConfigListener', async () => {
-      const sessionConfig: WalletLinkSessionConfig = {
+      const sessionConfig = {
         webhookId: 'webhookId',
         webhookUrl: 'webhookUrl',
         metadata: {
@@ -91,7 +92,7 @@ describe('WalletLinkRelay', () => {
 
       const relay = new WalletLinkRelay(options);
 
-      const metadataUpdatedSpy = jest.spyOn(relay, 'metadataUpdated');
+      const metadataUpdatedSpy = vi.spyOn(relay, 'metadataUpdated');
 
       (relay as any).connection.ws.incomingDataListener?.({
         ...sessionConfig,
@@ -105,15 +106,14 @@ describe('WalletLinkRelay', () => {
     });
 
     it('should update chainId and jsonRpcUrl only when distinct', async () => {
-      const callback = jest.fn();
       const relay = new WalletLinkRelay(options);
-      relay.setChainCallback(callback);
+      const callback = options.chainCallback;
 
-      const sessionConfig: WalletLinkSessionConfig = {
+      const sessionConfig = {
         webhookId: 'webhookId',
         webhookUrl: 'webhookUrl',
         metadata: {
-          ChainId: 'ChainId',
+          ChainId: '12345',
           JsonRpcUrl: 'JsonRpcUrl',
         },
       };
@@ -124,8 +124,8 @@ describe('WalletLinkRelay', () => {
         type: 'GetSessionConfigOK',
       });
       expect(callback).toHaveBeenCalledWith(
-        await decryptMock(sessionConfig.metadata.ChainId),
-        await decryptMock(sessionConfig.metadata.JsonRpcUrl)
+        await decryptMock(sessionConfig.metadata.JsonRpcUrl),
+        Number(await decryptMock(sessionConfig.metadata.ChainId))
       );
 
       // same chain id and json rpc url
@@ -150,8 +150,8 @@ describe('WalletLinkRelay', () => {
       });
 
       expect(callback).toHaveBeenCalledWith(
-        await decryptMock(newSessionConfig.metadata.ChainId),
-        await decryptMock(newSessionConfig.metadata.JsonRpcUrl)
+        await decryptMock(newSessionConfig.metadata.JsonRpcUrl),
+        Number(await decryptMock(newSessionConfig.metadata.ChainId))
       );
       expect(callback).toHaveBeenCalledTimes(2);
     });

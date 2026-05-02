@@ -5,15 +5,16 @@ __tests__/**
 
 # Config
 tsconfig.json
+tsconfig.base.json
 tsconfig.build.json
+.eslintignore
 .eslintrc.js
-babel.config.js
-webpack.config.js
-karma.conf.js
+.prettierignore
+release.sh
 
-# Jest
-jest.setup.ts
-jest.config.ts
+# Vitest
+vitest.setup.ts
+vitest.config.ts
 coverage/**
 
-compile-assets.js
+compile-assets.cjs
