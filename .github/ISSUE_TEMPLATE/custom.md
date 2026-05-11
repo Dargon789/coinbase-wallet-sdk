@@ -1,11 +1,10 @@
 ---
-name: Other issue
-about: Use this for any other issues or questions.
+name: Custom issue template
+about: Open a blank issue for general inquiries or topics not covered by other templates.
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the issue**
-Please provide a clear and concise description of your issue or question.
+

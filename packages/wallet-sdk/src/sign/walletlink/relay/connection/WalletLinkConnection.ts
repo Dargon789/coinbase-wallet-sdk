@@ -408,8 +408,8 @@ export class WalletLinkConnection {
       if (message.type !== 'WEB3_RESPONSE') return;
 
       this.listener?.handleWeb3ResponseMessage(message.id, message.response);
-    } catch (error) {
-      console.error('Failed to decrypt incoming message', error);
+    } catch (_error) {
+      // Had error decrypting
     }
   }
 

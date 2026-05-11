@@ -2,7 +2,7 @@
 name: Bug report
 about: Create a report to help us improve
 title: ''
-labels: 'bug'
+labels: ''
 assignees: ''
 
 ---
@@ -17,9 +17,6 @@ Steps to reproduce the behavior:
 3. Scroll down to '....'
 4. See error
 
-**Code sample**
-If applicable, provide a code sample, a link to a repository, or an executable test case that demonstrates the issue.
-
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
@@ -27,15 +24,15 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+ - OS: [e.g. macOS]
+ - Browser: [e.g. Chrome, Safari]
+ - Version: [e.g. 122]
 
 **Smartphone (please complete the following information):**
  - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+ - OS: [e.g. iOS 17]
+ - Browser: [e.g. Safari, Chrome]
+ - Version: [e.g. 17]
 
 **Additional context**
 Add any other context about the problem here.

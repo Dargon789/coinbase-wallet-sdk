@@ -49,6 +49,7 @@ import { SCWKeyManager } from './SCWKeyManager.js';
 import {
   addSenderToRequest,
   appendWithoutDuplicates,
+  prependWithoutDuplicates,
   assertFetchPermissionsRequest,
   assertGetCapabilitiesParams,
   assertParamsChainId,
@@ -743,7 +744,7 @@ export class SCWSigner implements Signer {
           correlationId,
           errorMessage: parseErrorMessageFromAny(error),
         });
-        throw standardErrors.provider.unauthorized(
+        return standardErrors.provider.unauthorized(
           'failed to add sub account owner when sending request to sub account signer'
         );
       }
