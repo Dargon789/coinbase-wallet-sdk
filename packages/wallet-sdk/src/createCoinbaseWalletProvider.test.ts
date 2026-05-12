@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 import { CoinbaseWalletProvider } from './CoinbaseWalletProvider';
 import { createCoinbaseWalletProvider } from './createCoinbaseWalletProvider';
 import { ConstructorOptions } from ':core/provider/interface';
+=======
+import { CoinbaseWalletProvider } from './CoinbaseWalletProvider.js';
+import { createCoinbaseWalletProvider } from './createCoinbaseWalletProvider.js';
+import { ConstructorOptions } from ':core/provider/interface.js';
+>>>>>>> upstream/master
 
 describe('createCoinbaseWalletProvider', () => {
   it('should return a provider', () => {

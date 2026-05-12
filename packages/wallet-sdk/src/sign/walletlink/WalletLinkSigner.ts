@@ -1,5 +1,6 @@
 // Copyright (c) 2018-2024 Coinbase, Inc. <https://www.coinbase.com/>
 
+<<<<<<< HEAD
 import eip712 from '../../vendor-js/eth-eip712-util';
 import { Signer } from '../interface';
 import { LOCAL_STORAGE_ADDRESSES_KEY } from './relay/constants';
@@ -11,6 +12,22 @@ import { standardErrors } from ':core/error';
 import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/provider/interface';
 import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage';
 import { AddressString } from ':core/type';
+=======
+import { WALLETLINK_URL } from ':core/constants.js';
+import { standardErrors } from ':core/error/errors.js';
+import { AppMetadata, ProviderEventCallback, RequestArguments } from ':core/provider/interface.js';
+import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage.js';
+import {
+  logHandshakeCompleted,
+  logHandshakeError,
+  logHandshakeStarted,
+  logRequestCompleted,
+  logRequestError,
+  logRequestStarted,
+} from ':core/telemetry/events/walletlink-signer.js';
+import { parseErrorMessageFromAny } from ':core/telemetry/utils.js';
+import { Address } from ':core/type/index.js';
+>>>>>>> upstream/master
 import {
   encodeToHexString,
   ensureAddressString,
@@ -20,8 +37,21 @@ import {
   ensureParsedJSONObject,
   hexStringFromBuffer,
   hexStringFromNumber,
+<<<<<<< HEAD
 } from ':core/type/util';
 import { fetchRPCRequest } from ':util/provider';
+=======
+} from ':core/type/util.js';
+import { correlationIds } from ':store/correlation-ids/store.js';
+import { fetchRPCRequest } from ':util/provider.js';
+import eip712 from '../../vendor-js/eth-eip712-util/index.cjs';
+import { Signer } from '../interface.js';
+import { WalletLinkRelay } from './relay/WalletLinkRelay.js';
+import { LOCAL_STORAGE_ADDRESSES_KEY } from './relay/constants.js';
+import { EthereumTransactionParams } from './relay/type/EthereumTransactionParams.js';
+import { isErrorResponse } from './relay/type/Web3Response.js';
+
+>>>>>>> upstream/master
 const DEFAULT_CHAIN_ID_KEY = 'DefaultChainId';
 const DEFAULT_JSON_RPC_URL = 'DefaultJsonRpcUrl';
 
@@ -32,7 +62,11 @@ export class WalletLinkSigner implements Signer {
   private metadata: AppMetadata;
   private _relay: WalletLinkRelay | null = null;
   private readonly _storage: ScopedLocalStorage;
+<<<<<<< HEAD
   private _addresses: AddressString[] = [];
+=======
+  private _addresses: Address[] = [];
+>>>>>>> upstream/master
   private callback: ProviderEventCallback | null;
 
   constructor(options: { metadata: AppMetadata; callback?: ProviderEventCallback }) {
@@ -42,7 +76,11 @@ export class WalletLinkSigner implements Signer {
 
     const cachedAddresses = this._storage.getItem(LOCAL_STORAGE_ADDRESSES_KEY);
     if (cachedAddresses) {
+<<<<<<< HEAD
       const addresses = cachedAddresses.split(' ') as AddressString[];
+=======
+      const addresses = cachedAddresses.split(' ') as string[];
+>>>>>>> upstream/master
       if (addresses[0] !== '') {
         this._addresses = addresses.map((address) => ensureAddressString(address));
       }
@@ -57,11 +95,39 @@ export class WalletLinkSigner implements Signer {
     return { id, secret };
   }
 
+<<<<<<< HEAD
   async handshake() {
     await this._eth_requestAccounts();
   }
 
   private get selectedAddress(): AddressString | undefined {
+=======
+  async handshake(args: RequestArguments) {
+    // only eth_requestAccounts is supported for handshake in WalletLink
+    const method = 'eth_requestAccounts';
+    const correlationId = correlationIds.get(args);
+    logHandshakeStarted({
+      method,
+      correlationId,
+    });
+    try {
+      await this._eth_requestAccounts();
+      logHandshakeCompleted({
+        method,
+        correlationId,
+      });
+    } catch (error) {
+      logHandshakeError({
+        method,
+        correlationId,
+        errorMessage: parseErrorMessageFromAny(error),
+      });
+      throw error;
+    }
+  }
+
+  private get selectedAddress(): Address | undefined {
+>>>>>>> upstream/master
     return this._addresses[0] || undefined;
   }
 
@@ -236,6 +302,27 @@ export class WalletLinkSigner implements Signer {
   }
 
   async request(request: RequestArguments) {
+<<<<<<< HEAD
+=======
+    const correlationId = correlationIds.get(request);
+    logRequestStarted({ method: request.method, correlationId });
+
+    try {
+      const result = await this._request(request);
+      logRequestCompleted({ method: request.method, correlationId });
+      return result;
+    } catch (error) {
+      logRequestError({
+        method: request.method,
+        correlationId,
+        errorMessage: parseErrorMessageFromAny(error),
+      });
+      throw error;
+    }
+  }
+
+  private async _request(request: RequestArguments) {
+>>>>>>> upstream/master
     const params = (request.params as RequestParam) || [];
 
     switch (request.method) {
@@ -442,7 +529,11 @@ export class WalletLinkSigner implements Signer {
       return hexStringFromBuffer(
         hashFuncMap[method as keyof typeof hashFuncMap]({
           data: ensureParsedJSONObject(input),
+<<<<<<< HEAD
         }),
+=======
+        }) as Buffer,
+>>>>>>> upstream/master
         true
       );
     };

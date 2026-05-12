@@ -1,9 +1,24 @@
+<<<<<<< HEAD
 import { LIB_VERSION } from '../../version';
 import { ConfigMessage, Message, MessageID } from '../message';
 import { CB_KEYS_URL } from ':core/constants';
 import { standardErrors } from ':core/error';
 import { AppMetadata, Preference } from ':core/provider/interface';
 import { closePopup, openPopup } from ':util/web';
+=======
+import { CB_KEYS_URL } from ':core/constants.js';
+import { standardErrors } from ':core/error/errors.js';
+import { AppMetadata, Preference } from ':core/provider/interface.js';
+import {
+  logPopupSetupCompleted,
+  logPopupSetupStarted,
+  logPopupUnloadReceived,
+} from ':core/telemetry/events/communicator.js';
+import { closePopup, openPopup } from ':util/web.js';
+import { VERSION } from '../../sdk-info.js';
+import { ConfigMessage } from '../message/ConfigMessage.js';
+import { Message, MessageID } from '../message/Message.js';
+>>>>>>> upstream/master
 
 export type CommunicatorOptions = {
   url?: string;
@@ -98,10 +113,21 @@ export class Communicator {
       return this.popup;
     }
 
+<<<<<<< HEAD
     this.popup = openPopup(this.url);
 
     this.onMessage<ConfigMessage>(({ event }) => event === 'PopupUnload')
       .then(this.disconnect)
+=======
+    logPopupSetupStarted();
+    this.popup = await openPopup(this.url);
+
+    this.onMessage<ConfigMessage>(({ event }) => event === 'PopupUnload')
+      .then(() => {
+        this.disconnect();
+        logPopupUnloadReceived();
+      })
+>>>>>>> upstream/master
       .catch(() => {});
 
     return this.onMessage<ConfigMessage>(({ event }) => event === 'PopupLoaded')
@@ -109,14 +135,25 @@ export class Communicator {
         this.postMessage({
           requestId: message.id,
           data: {
+<<<<<<< HEAD
             version: LIB_VERSION,
             metadata: this.metadata,
             preference: this.preference,
+=======
+            version: VERSION,
+            metadata: this.metadata,
+            preference: this.preference,
+            location: window.location.toString(),
+>>>>>>> upstream/master
           },
         });
       })
       .then(() => {
         if (!this.popup) throw standardErrors.rpc.internal();
+<<<<<<< HEAD
+=======
+        logPopupSetupCompleted();
+>>>>>>> upstream/master
         return this.popup;
       });
   };

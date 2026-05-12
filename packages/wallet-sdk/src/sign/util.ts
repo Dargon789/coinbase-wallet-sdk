@@ -1,15 +1,29 @@
+<<<<<<< HEAD
 import { Signer } from './interface';
 import { SCWSigner } from './scw/SCWSigner';
 import { WalletLinkSigner } from './walletlink/WalletLinkSigner';
 import { Communicator } from ':core/communicator/Communicator';
 import { ConfigMessage, MessageID, SignerType } from ':core/message';
+=======
+import { Communicator } from ':core/communicator/Communicator.js';
+import { ConfigMessage, SignerType } from ':core/message/ConfigMessage.js';
+import { MessageID } from ':core/message/Message.js';
+>>>>>>> upstream/master
 import {
   AppMetadata,
   Preference,
   ProviderEventCallback,
   RequestArguments,
+<<<<<<< HEAD
 } from ':core/provider/interface';
 import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage';
+=======
+} from ':core/provider/interface.js';
+import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage.js';
+import { Signer } from './interface.js';
+import { SCWSigner } from './scw/SCWSigner.js';
+import { WalletLinkSigner } from './walletlink/WalletLinkSigner.js';
+>>>>>>> upstream/master
 
 const SIGNER_TYPE_KEY = 'SignerType';
 const storage = new ScopedLocalStorage('CBWSDK', 'SignerConfigurator');
@@ -22,6 +36,17 @@ export function storeSignerType(signerType: SignerType) {
   storage.setItem(SIGNER_TYPE_KEY, signerType);
 }
 
+<<<<<<< HEAD
+=======
+export function signerToSignerType(signer: Signer | null): SignerType | undefined {
+  if (!signer) {
+    return undefined;
+  }
+
+  return signer instanceof SCWSigner ? 'scw' : 'walletlink';
+}
+
+>>>>>>> upstream/master
 export async function fetchSignerType(params: {
   communicator: Communicator;
   preference: Preference;
@@ -30,7 +55,13 @@ export async function fetchSignerType(params: {
   callback: ProviderEventCallback;
 }): Promise<SignerType> {
   const { communicator, metadata, handshakeRequest, callback } = params;
+<<<<<<< HEAD
   listenForWalletLinkSessionRequest(communicator, metadata, callback).catch(() => {});
+=======
+  listenForWalletLinkSessionRequest(communicator, metadata, callback, handshakeRequest).catch(
+    () => {}
+  );
+>>>>>>> upstream/master
 
   const request: ConfigMessage & { id: MessageID } = {
     id: crypto.randomUUID(),
@@ -71,7 +102,12 @@ export function createSigner(params: {
 async function listenForWalletLinkSessionRequest(
   communicator: Communicator,
   metadata: AppMetadata,
+<<<<<<< HEAD
   callback: ProviderEventCallback
+=======
+  callback: ProviderEventCallback,
+  handshakeRequest: RequestArguments
+>>>>>>> upstream/master
 ) {
   await communicator.onMessage<ConfigMessage>(({ event }) => event === 'WalletLinkSessionRequest');
 
@@ -89,7 +125,11 @@ async function listenForWalletLinkSessionRequest(
   } as ConfigMessage);
 
   // wait for handshake to complete
+<<<<<<< HEAD
   await walletlink.handshake();
+=======
+  await walletlink.handshake(handshakeRequest);
+>>>>>>> upstream/master
 
   // send connected status to popup
   communicator.postMessage({

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { errorValues, standardErrorCodes } from './constants';
+=======
+import { errorValues, standardErrorCodes } from './constants.js';
+>>>>>>> upstream/master
 
 const FALLBACK_MESSAGE = 'Unspecified error message.';
 
@@ -53,10 +57,17 @@ export function isValidCode(code: number): boolean {
 export function getErrorCode(error: unknown): number | undefined {
   if (typeof error === 'number') {
     return error;
+<<<<<<< HEAD
   } else if (isErrorWithCode(error)) {
     return error.code ?? error.errorCode;
   }
 
+=======
+  } 
+  if (isErrorWithCode(error)) {
+    return error.code ?? error.errorCode;
+  }
+>>>>>>> upstream/master
   return undefined;
 }
 

@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 import { Web3Response } from './type/Web3Response';
 import { prepend0x } from ':core/type/util';
+=======
+import { Web3Response } from './type/Web3Response.js';
+import { prepend0x } from ':core/type/util.js';
+>>>>>>> upstream/master
 
 type ResponseCallback = (response: Web3Response) => void;
 

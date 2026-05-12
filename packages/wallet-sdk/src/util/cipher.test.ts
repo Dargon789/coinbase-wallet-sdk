@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { decrypt, deriveSharedSecret, encrypt, generateKeyPair } from './cipher';
+=======
+import { decrypt, deriveSharedSecret, encrypt, generateKeyPair } from './cipher.js';
+>>>>>>> upstream/master
 
 describe('Cipher', () => {
   describe('generateKeyPair', () => {
@@ -56,7 +60,7 @@ describe('Cipher', () => {
 
       // Attempting to decrypt with a different shared secret
       await expect(decrypt(sharedSecretDerivedByPeer, encryptedMessage)).rejects.toThrow(
-        'Unsupported state or unable to authenticate data'
+        'The operation failed for an operation-specific reason'
       );
     });
   });

@@ -1,10 +1,18 @@
+<<<<<<< HEAD
 import { ScopedLocalStorage } from ':core/storage/ScopedLocalStorage';
+=======
+import { store } from ':store/store.js';
+>>>>>>> upstream/master
 import {
   deriveSharedSecret,
   exportKeyToHexString,
   generateKeyPair,
   importKeyFromHexString,
+<<<<<<< HEAD
 } from ':util/cipher';
+=======
+} from ':util/cipher.js';
+>>>>>>> upstream/master
 
 interface StorageItem {
   storageKey: string;
@@ -24,7 +32,10 @@ const PEER_PUBLIC_KEY = {
 } as const;
 
 export class SCWKeyManager {
+<<<<<<< HEAD
   private readonly storage = new ScopedLocalStorage('CBWSDK', 'SCWKeyManager');
+=======
+>>>>>>> upstream/master
   private ownPrivateKey: CryptoKey | null = null;
   private ownPublicKey: CryptoKey | null = null;
   private peerPublicKey: CryptoKey | null = null;
@@ -54,9 +65,7 @@ export class SCWKeyManager {
     this.peerPublicKey = null;
     this.sharedSecret = null;
 
-    this.storage.removeItem(OWN_PUBLIC_KEY.storageKey);
-    this.storage.removeItem(OWN_PRIVATE_KEY.storageKey);
-    this.storage.removeItem(PEER_PUBLIC_KEY.storageKey);
+    store.keys.clear();
   }
 
   private async generateKeyPair() {
@@ -91,9 +100,8 @@ export class SCWKeyManager {
   }
 
   // storage methods
-
   private async loadKey(item: StorageItem): Promise<CryptoKey | null> {
-    const key = this.storage.getItem(item.storageKey);
+    const key = store.keys.get(item.storageKey);
     if (!key) return null;
 
     return importKeyFromHexString(item.keyType, key);
@@ -101,6 +109,6 @@ export class SCWKeyManager {
 
   private async storeKey(item: StorageItem, key: CryptoKey) {
     const hexString = await exportKeyToHexString(item.keyType, key);
-    this.storage.setItem(item.storageKey, hexString);
+    store.keys.set(item.storageKey, hexString);
   }
 }

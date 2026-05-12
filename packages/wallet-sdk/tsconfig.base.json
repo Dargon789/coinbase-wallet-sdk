@@ -13,7 +13,13 @@
     "outDir": "./dist",
     "paths": {
       ":util/*": ["src/util/*"],
+<<<<<<< HEAD
       ":core/*": ["src/core/*"]
+=======
+      ":core/*": ["src/core/*"],
+      ":store/*": ["src/store/*"],
+      ":sign/*": ["src/sign/*"],
+>>>>>>> upstream/master
     },
     "target": "es2017",
     "jsx": "react",
@@ -40,6 +46,10 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+<<<<<<< HEAD
     "types": ["node", "jest", "@testing-library/jest-dom"],
+=======
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+>>>>>>> upstream/master
   }
 }

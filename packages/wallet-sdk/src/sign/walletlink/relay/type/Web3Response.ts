@@ -1,7 +1,12 @@
 // Copyright (c) 2018-2023 Coinbase, Inc. <https://www.coinbase.com/>
 
+<<<<<<< HEAD
 import { Web3Method } from './Web3Request';
 import { AddressString, HexString } from ':core/type';
+=======
+import { Web3Method } from './Web3Request.js';
+import { Address, HexString } from ':core/type/index.js';
+>>>>>>> upstream/master
 
 export type Web3Response<M extends Web3Method = Web3Method> =
   | Extract<_Web3Response, { method: M }>
@@ -21,7 +26,7 @@ type _Web3Response =
   | {
       method: 'connectAndSignIn';
       result: {
-        accounts: AddressString[];
+        accounts: Address[];
         message: HexString;
         signature: HexString;
       };
@@ -42,7 +47,7 @@ type _Web3Response =
     }
   | {
       method: 'requestEthereumAccounts';
-      result: AddressString[];
+      result: Address[];
     }
   | {
       method: 'watchAsset';
@@ -62,5 +67,9 @@ type _Web3Response =
     }
   | {
       method: 'ethereumAddressFromSignedMessage';
+<<<<<<< HEAD
       result: AddressString;
+=======
+      result: Address;
+>>>>>>> upstream/master
     };

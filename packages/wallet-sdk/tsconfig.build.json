@@ -1,10 +1,17 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+<<<<<<< HEAD
     "allowJs": false,
     "declaration": true,
     "sourceMap": false,
+=======
+    "allowJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+>>>>>>> upstream/master
   },
   "include": ["src"],
-  "exclude": ["dist", "build", "**/*.test.*", "mocks"]
+  "exclude": ["dist", "build", "**/*.test.*", "mocks", "**/HeartbeatWorker.js"]
 }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { AppMetadata, Preference } from 'src/index';
 
 import { LIB_VERSION } from '../../version';
@@ -8,6 +9,20 @@ import { openPopup } from ':util/web';
 
 jest.mock(':util/web', () => ({
   openPopup: jest.fn(),
+=======
+import { Mock, vi } from 'vitest';
+
+import { AppMetadata, Preference } from 'src/index.js';
+
+import { VERSION } from '../../sdk-info.js';
+import { Message, MessageID } from '../message/Message.js';
+import { Communicator } from './Communicator.js';
+import { CB_KEYS_URL } from ':core/constants.js';
+import { openPopup } from ':util/web.js';
+
+vi.mock(':util/web', () => ({
+  openPopup: vi.fn(),
+>>>>>>> upstream/master
 }));
 
 // Dispatches a message event to simulate postMessage calls from the popup
@@ -40,8 +55,13 @@ function queueMessageEvent({
   setTimeout(() => dispatchMessageEvent({ data, origin }), 200);
 }
 
+<<<<<<< HEAD
 const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
 const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
+=======
+const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+>>>>>>> upstream/master
 
 const appMetadata: AppMetadata = {
   appName: 'Test App',
@@ -60,7 +80,11 @@ describe('Communicator', () => {
   >;
 
   beforeEach(() => {
+<<<<<<< HEAD
     jest.clearAllMocks();
+=======
+    vi.clearAllMocks();
+>>>>>>> upstream/master
 
     // url defaults to CB_KEYS_URL
     communicator = new Communicator({
@@ -71,12 +95,21 @@ describe('Communicator', () => {
     urlOrigin = new URL(CB_KEYS_URL).origin;
 
     mockPopup = {
+<<<<<<< HEAD
       postMessage: jest.fn(),
       close: jest.fn(),
       closed: false,
       focus: jest.fn(),
     } as unknown as Window;
     (openPopup as jest.Mock).mockImplementation(() => mockPopup);
+=======
+      postMessage: vi.fn(),
+      close: vi.fn(),
+      closed: false,
+      focus: vi.fn(),
+    } as unknown as Window;
+    (openPopup as Mock).mockImplementation(() => mockPopup);
+>>>>>>> upstream/master
   });
 
   describe('onMessage', () => {
@@ -113,9 +146,16 @@ describe('Communicator', () => {
         1,
         {
           data: {
+<<<<<<< HEAD
             version: LIB_VERSION,
             metadata: appMetadata,
             preference,
+=======
+            version: VERSION,
+            metadata: appMetadata,
+            preference,
+            location: 'http://localhost:3000/',
+>>>>>>> upstream/master
           },
         },
         urlOrigin
@@ -140,9 +180,16 @@ describe('Communicator', () => {
         1,
         {
           data: {
+<<<<<<< HEAD
             version: LIB_VERSION,
             metadata: appMetadata,
             preference,
+=======
+            version: VERSION,
+            metadata: appMetadata,
+            preference,
+            location: 'http://localhost:3000/',
+>>>>>>> upstream/master
           },
         },
         urlOrigin
@@ -162,9 +209,16 @@ describe('Communicator', () => {
         1,
         {
           data: {
+<<<<<<< HEAD
             version: LIB_VERSION,
             metadata: appMetadata,
             preference,
+=======
+            version: VERSION,
+            metadata: appMetadata,
+            preference,
+            location: 'http://localhost:3000/',
+>>>>>>> upstream/master
           },
         },
         urlOrigin
@@ -174,12 +228,21 @@ describe('Communicator', () => {
 
     it('should re-focus and return the existing popup window if one is already open.', async () => {
       mockPopup = {
+<<<<<<< HEAD
         postMessage: jest.fn(),
         close: jest.fn(),
         closed: false,
         focus: jest.fn(),
       } as unknown as Window;
       (openPopup as jest.Mock).mockImplementationOnce(() => mockPopup);
+=======
+        postMessage: vi.fn(),
+        close: vi.fn(),
+        closed: false,
+        focus: vi.fn(),
+      } as unknown as Window;
+      (openPopup as Mock).mockImplementationOnce(() => mockPopup);
+>>>>>>> upstream/master
 
       queueMessageEvent(popupLoadedMessage);
       await communicator.waitForPopupLoaded();
@@ -190,12 +253,21 @@ describe('Communicator', () => {
 
     it('should open a popup window if an existing one is defined but closed', async () => {
       mockPopup = {
+<<<<<<< HEAD
         postMessage: jest.fn(),
         close: jest.fn(),
         // Simulate the popup being closed
         closed: true,
       } as unknown as Window;
       (openPopup as jest.Mock).mockImplementationOnce(() => mockPopup);
+=======
+        postMessage: vi.fn(),
+        close: vi.fn(),
+        // Simulate the popup being closed
+        closed: true,
+      } as unknown as Window;
+      (openPopup as Mock).mockImplementationOnce(() => mockPopup);
+>>>>>>> upstream/master
 
       queueMessageEvent(popupLoadedMessage);
       await communicator.waitForPopupLoaded();
