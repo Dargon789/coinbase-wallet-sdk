@@ -10,11 +10,7 @@
    - Desktop: Users can connect to your dapp by scanning a QR code
    - Mobile: Users can connect to your mobile dapp through a deeplink to the dapp browser
 1. Coinbase Wallet extension for [Chrome](https://chrome.google.com/webstore/detail/coinbase-wallet-extension/hnfanknocfeofbddgcijnmhnfnkdnaad?hl=en) and [Brave](https://chromewebstore.google.com/detail/coinbase-wallet-extension/hnfanknocfeofbddgcijnmhnfnkdnaad?hl=en)
-<<<<<<< HEAD
-   - Desktop: Users can connect by clicking the connect with extension option.
-=======
    - Desktop: Users can connect by clicking the connect with an extension option.
->>>>>>> upstream/master
 
 ### Installing Wallet SDK
 
@@ -52,11 +48,7 @@
 
 > Migrating from v3 to v4? Please see our [v4 migration guide](https://www.smartwallet.dev/sdk/v3-to-v4-changes) for a full list of breaking changes.
 
-<<<<<<< HEAD
-1. Compare installed version with latest:
-=======
 1. Compare the installed version with the latest:
->>>>>>> upstream/master
 
    ```shell
    # yarn
@@ -92,11 +84,7 @@
    const provider = sdk.makeWeb3Provider();
    ```
 
-<<<<<<< HEAD
-3. Request accounts to initialize connection to wallet
-=======
 3. Request accounts to initialize a connection to wallet
->>>>>>> upstream/master
 
    ```js
    const addresses = provider.request({
